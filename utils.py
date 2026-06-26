@@ -208,7 +208,6 @@ def parse_json_list(value: Any) -> list:
 class AppInitializer:
     @staticmethod
     def setup():
-        st.session_state.setdefault("auth_user", None)
         st.session_state.setdefault("current_user", "")
         st.session_state.setdefault("user_records_fallback", UserService.default_users())
         st.session_state.setdefault("announcements_fallback", [])
@@ -232,9 +231,7 @@ class AppInitializer:
         st.session_state.setdefault("cal_month", date.today().month)
         st.session_state.setdefault("selected_date", date.today())
 
-        if st.session_state.auth_user:
-            st.session_state.current_user = st.session_state.auth_user
-        elif not st.session_state.current_user and st.session_state.partners:
+        if not st.session_state.current_user and st.session_state.partners:
             st.session_state.current_user = st.session_state.partners[0]
 
 
@@ -685,7 +682,7 @@ class AnnouncementService:
         return sorted(active, key=lambda a: (bool_text(a.get("pinned", "FALSE"), False) != "TRUE", -parse_int(a.get("id", 0), 0)))
 
     @staticmethod
-    def create(title, content, level, expires_at, pinned, attachment):
+    def create(title, content, level, expires_at, pinned, attachment, author=None):
         records = AnnouncementService.load_all()
         next_id = max([parse_int(r.get("id", 0), 0) for r in records], default=0) + 1
         attachment_name = ""
@@ -698,7 +695,7 @@ class AnnouncementService:
             attachment_base64 = base64.b64encode(data).decode("utf-8")
         records.append({
             "id": next_id, "title": title.strip(), "content": content.strip(), "level": level,
-            "author": st.session_state.current_user, "created_at": now_text(),
+            "author": author or st.session_state.current_user or "未指定", "created_at": now_text(),
             "expires_at": expires_at.strftime("%Y-%m-%d") if expires_at else "",
             "pinned": bool_text(pinned), "active": "TRUE", "attachment_name": attachment_name,
             "attachment_type": attachment_type, "attachment_base64": attachment_base64, "seen_by": "",
@@ -740,8 +737,8 @@ class AnnouncementService:
 class ViewComponents:
     @staticmethod
     def require_login():
-        ViewComponents.render_login_gate()
-        ViewComponents.render_user_sidebar()
+        """保留舊頁面呼叫名稱，但不再強制全站登入。"""
+        ViewComponents.render_public_sidebar()
 
     @staticmethod
     def render_filters():
@@ -755,92 +752,50 @@ class ViewComponents:
 
     @staticmethod
     def render_login_gate():
-        if st.session_state.get("auth_user"):
-            return True
-        st.title("🔐 鋒霈  工程部   平台登入")
-        st.caption("請使用人員帳號與密碼登入。預設密碼為 0000，首次登入後請立即修改。")
-        with st.container(border=True):
-            with st.form("login_form"):
-                account = st.text_input("帳號 / 工號")
-                password = st.text_input("密碼", type="password")
-                submitted = st.form_submit_button("登入", use_container_width=True)
-                if submitted:
-                    ok, msg, user = UserService.authenticate(account, password)
-                    if ok:
-                        st.session_state.auth_user = user.get("name")
-                        st.session_state.current_user = user.get("name")
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
-        if not UserService.using_google_sheet():
-            st.info("目前未偵測到 Google Sheet，人員資料會暫存在本次執行階段。部署時請設定 Streamlit Secrets 與 Users 工作表。")
-            if st.session_state.get("sheet_db_error"):
-                st.caption(f"連線訊息：{st.session_state.sheet_db_error}")
-        st.stop()
+        """舊版相容：不再顯示登入牆。"""
+        return True
 
     @staticmethod
     def render_user_sidebar():
-        user = st.session_state.get("auth_user", "")
-        user_record = UserService.get_by_name(user) or {}
+        ViewComponents.render_public_sidebar()
+
+    @staticmethod
+    def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.success(f"已登入：{user}")
-        st.sidebar.caption(f"角色：{user_record.get('role', '未設定')}")
-        if st.sidebar.button("登出", use_container_width=True):
-            st.session_state.auth_user = None
-            st.session_state.current_user = ""
-            st.rerun()
-        if bool_text(user_record.get("must_change_password", "FALSE"), False) == "TRUE":
-            st.sidebar.warning("你的帳號仍使用預設密碼，請先修改密碼。")
-        with st.sidebar.expander("🔑 修改我的密碼", expanded=bool_text(user_record.get("must_change_password", "FALSE"), False) == "TRUE"):
-            with st.form("change_my_password_form"):
-                old_password = st.text_input("原密碼", type="password")
-                new_password = st.text_input("新密碼", type="password")
-                confirm_password = st.text_input("確認新密碼", type="password")
-                submitted = st.form_submit_button("更新密碼", use_container_width=True)
-                if submitted:
-                    ok, msg = UserService.change_password(user_record.get("account", ""), old_password, new_password, confirm_password, require_old=True)
-                    if ok:
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
-        if AnnouncementService.is_admin(user):
-            with st.sidebar.expander("👥 人員管理", expanded=False):
-                users = UserService.load_all()
-                st.caption("新增或更新人員。新帳號預設密碼為 0000。")
-                with st.form("admin_user_form"):
-                    name = st.text_input("姓名")
-                    account = st.text_input("帳號（英文/數字，登入用）")
-                    role_map = {"一般人員": 0, "主管": 1, "管理員": 2}
-                    role = st.selectbox("角色", list(role_map.keys()))
-                    active = st.checkbox("啟用帳號", value=True)
-                    direct_password = st.text_input("直接設定密碼（留空則新帳號預設 0000）", type="password")
-                    reset_password = st.checkbox("重設密碼為 0000", value=False)
-                    submitted = st.form_submit_button("新增 / 更新人員", use_container_width=True)
-                    if submitted:
-                        if not name.strip() or not account.strip():
-                            st.warning("請輸入姓名與帳號。")
-                        else:
-                            result = UserService.upsert_user(name, account, role, role_map[role], active, reset_password, direct_password)
-                            st.success("人員已新增。" if result == "created" else "人員資料已更新。")
-                            st.rerun()
-                st.divider()
-                for u in users:
-                    active_text = "啟用" if bool_text(u.get("active", "TRUE")) == "TRUE" else "停用"
-                    default_text = "｜需改密碼" if bool_text(u.get("must_change_password", "FALSE"), False) == "TRUE" else ""
-                    st.caption(f"{u.get('name')} / {u.get('account')} / {u.get('role')} / {active_text}{default_text}")
+        st.sidebar.info("目前版本已取消全站登入。")
+        if st.session_state.partners:
+            current = st.session_state.get("current_user") or st.session_state.partners[0]
+            index = st.session_state.partners.index(current) if current in st.session_state.partners else 0
+            selected = st.sidebar.selectbox("目前操作人員（用於任務/會議紀錄）", st.session_state.partners, index=index)
+            st.session_state.current_user = selected
+        else:
+            st.session_state.current_user = st.session_state.get("current_user") or "訪客"
+            st.sidebar.caption("尚未建立 Users 人員名單。")
+        if not UserService.using_google_sheet():
+            st.sidebar.warning("未偵測到 Google Sheet，資料會暫存在本次執行階段。")
+            if st.session_state.get("sheet_db_error"):
+                st.sidebar.caption(f"連線訊息：{st.session_state.sheet_db_error}")
+
+        with st.sidebar.expander("👥 人員資料提醒", expanded=False):
+            st.caption("人員不需要登入；只有發布布告欄消息時，才會檢查 Users 工作表中的工號與密碼。")
+            st.caption("Users 工作表建議保留欄位：name、account、password、role、role_level、active。")
 
     @staticmethod
     def get_active_announcement_count():
         return len(AnnouncementService.get_active())
 
     @staticmethod
+    def _validate_publisher(account, password):
+        ok, msg, user = UserService.authenticate(account, password)
+        if not ok:
+            return False, msg, None
+        return True, "發布人驗證成功。", user
+
+    @staticmethod
     def render_announcement_board():
         level_icon = {"一般": "📌", "重要": "⚠️", "緊急": "🚨", "維護": "🛠️"}
         level_label = {"一般": "一般公告", "重要": "重要公告", "緊急": "緊急公告", "維護": "維護公告"}
-        user = st.session_state.current_user
-        is_admin = AnnouncementService.is_admin(user)
+        user = st.session_state.get("current_user", "訪客") or "訪客"
         announcements = AnnouncementService.get_active()
         unread_count = AnnouncementService.unread_count(user)
         pinned_titles = [a.get("title", "") for a in announcements if bool_text(a.get("pinned", "FALSE"), False) == "TRUE"]
@@ -851,6 +806,7 @@ class ViewComponents:
                     <marquee behavior="scroll" direction="left" scrollamount="5">{marquee_text}</marquee>
                 </div>
                 """, unsafe_allow_html=True)
+
         title_col, status_col = st.columns([5, 2])
         with title_col:
             st.subheader("📢 鋒霈 工程部布告欄")
@@ -863,36 +819,50 @@ class ViewComponents:
                     pass
             else:
                 st.success("✅ 無未讀公告")
+
         if not AnnouncementService.using_google_sheet():
             st.info("目前未偵測到 Google Sheet 設定，公告會暫存在本次執行階段。部署時請設定 Streamlit Secrets。")
-        if is_admin:
-            with st.expander("👮 管理員發布公告", expanded=False):
-                with st.form("enterprise_announcement_form", clear_on_submit=True):
-                    title = st.text_input("公告標題")
-                    content = st.text_area("公告內容", height=140)
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        level = st.selectbox("公告等級", ["一般", "重要", "緊急", "維護"])
-                    with c2:
-                        expires_at = st.date_input("到期日", value=date.today() + timedelta(days=30))
-                    with c3:
-                        pinned = st.checkbox("跑馬燈置頂", value=False)
-                    attachment = st.file_uploader("附件（圖片 / PDF，建議 5MB 以下）", type=["png", "jpg", "jpeg", "pdf"])
-                    submitted = st.form_submit_button("發布公告", use_container_width=True)
-                    if submitted:
-                        if not title.strip() or not content.strip():
-                            st.warning("請輸入公告標題與內容。")
-                        elif attachment and attachment.size > 5 * 1024 * 1024:
-                            st.error("附件超過 5MB，請壓縮後再上傳。")
+
+        with st.expander("📣 發布公告（需輸入發布人工號與密碼）", expanded=False):
+            with st.form("enterprise_announcement_form", clear_on_submit=True):
+                c0a, c0b = st.columns(2)
+                with c0a:
+                    publisher_account = st.text_input("發布人工號 / 帳號")
+                with c0b:
+                    publisher_password = st.text_input("發布人密碼", type="password")
+
+                title = st.text_input("公告標題")
+                content = st.text_area("公告內容", height=140)
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    level = st.selectbox("公告等級", ["一般", "重要", "緊急", "維護"])
+                with c2:
+                    expires_at = st.date_input("到期日", value=date.today() + timedelta(days=30))
+                with c3:
+                    pinned = st.checkbox("跑馬燈置頂", value=False)
+                attachment = st.file_uploader("附件（圖片 / PDF，建議 5MB 以下）", type=["png", "jpg", "jpeg", "pdf"])
+                submitted = st.form_submit_button("發布公告", use_container_width=True)
+                if submitted:
+                    if not publisher_account.strip() or not publisher_password:
+                        st.warning("請輸入發布人的工號與密碼。")
+                    elif not title.strip() or not content.strip():
+                        st.warning("請輸入公告標題與內容。")
+                    elif attachment and attachment.size > 5 * 1024 * 1024:
+                        st.error("附件超過 5MB，請壓縮後再上傳。")
+                    else:
+                        ok, msg, publisher = ViewComponents._validate_publisher(publisher_account, publisher_password)
+                        if not ok:
+                            st.error(msg)
                         else:
-                            AnnouncementService.create(title, content, level, expires_at, pinned, attachment)
-                            st.success("公告已發布並寫入布告欄。")
+                            author = publisher.get("name") or publisher.get("account") or publisher_account
+                            AnnouncementService.create(title, content, level, expires_at, pinned, attachment, author=author)
+                            st.success(f"公告已發布並寫入布告欄。發布人：{author}")
                             st.rerun()
-        else:
-            st.caption("目前帳號為一般使用者：僅能查看公告，發布與下架需管理員權限。")
+
         if not announcements:
             st.info("目前沒有有效公告。")
             return
+
         for ann in announcements:
             ann_id = parse_int(ann.get("id", 0), 0)
             icon = level_icon.get(ann.get("level", "一般"), "📌")
@@ -919,19 +889,31 @@ class ViewComponents:
                     if st.button("標記已讀", key=f"seen_ann_{ann_id}"):
                         AnnouncementService.mark_seen(ann_id, user)
                         st.rerun()
-                if is_admin:
+
+                with st.expander("公告管理（需管理員工號與密碼）", expanded=False):
+                    admin_account = st.text_input("管理員工號 / 帳號", key=f"admin_acc_{ann_id}")
+                    admin_password = st.text_input("管理員密碼", type="password", key=f"admin_pwd_{ann_id}")
                     b1, b2, b3, _ = st.columns([1.2, 1.2, 1.2, 5])
+                    def admin_ok():
+                        ok, msg, admin = UserService.authenticate(admin_account, admin_password)
+                        if not ok:
+                            st.error(msg)
+                            return False
+                        if parse_int(admin.get("role_level", 0), 0) < 2:
+                            st.error("此帳號不是管理員，無法管理公告。")
+                            return False
+                        return True
                     with b1:
-                        if st.button("置頂/取消", key=f"pin_ann_{ann_id}"):
+                        if st.button("置頂/取消", key=f"pin_ann_{ann_id}") and admin_ok():
                             new_value = "FALSE" if bool_text(ann.get("pinned", "FALSE"), False) == "TRUE" else "TRUE"
                             AnnouncementService.update_flag(ann_id, "pinned", new_value)
                             st.rerun()
                     with b2:
-                        if st.button("立即下架", key=f"off_ann_{ann_id}"):
+                        if st.button("立即下架", key=f"off_ann_{ann_id}") and admin_ok():
                             AnnouncementService.update_flag(ann_id, "active", "FALSE")
                             st.rerun()
                     with b3:
-                        if st.button("清除已讀", key=f"clear_seen_ann_{ann_id}"):
+                        if st.button("清除已讀", key=f"clear_seen_ann_{ann_id}") and admin_ok():
                             AnnouncementService.update_flag(ann_id, "seen_by", "")
                             st.rerun()
 
