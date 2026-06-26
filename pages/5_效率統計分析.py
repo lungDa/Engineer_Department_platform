@@ -42,10 +42,8 @@ else:
     load_df = TaskService.calculate_team_capacity()
 
     st.dataframe(
-    load_df,
-    width="stretch"
-    ),
-        use_container_width=True
+        load_df,
+        width="stretch"
     )
 
     if any(load_df['總負載權重'] > 2.0):
@@ -65,7 +63,7 @@ else:
                 names=cat_counts.index,
                 hole=0.4
             ),
-            use_container_width=True
+            width="stretch"
         )
 
     with c2:
@@ -77,7 +75,7 @@ else:
                 y=['進行中(權重1.0)', '待辦(權重0.3)'],
                 barmode='stack'
             ),
-            use_container_width=True
+            width="stretch"
         )
 
     if overdue:
@@ -94,4 +92,4 @@ else:
 
         df_o.columns = ['任務名稱', '目前狀態', '原訂截止日', '負責夥伴']
 
-        st.dataframe(df_o, use_container_width=True)
+        st.dataframe(df_o, width="stretch")
