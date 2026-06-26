@@ -1,3 +1,4 @@
+import base64
 import json
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -545,8 +546,16 @@ class AnnouncementService:
     @staticmethod
     def save_all(records):
         records = SheetDB.normalize_records(records, AnnouncementService.COLUMNS)
-        if not SheetDB.save(AnnouncementService.WORKSHEET_NAME, AnnouncementService.COLUMNS, records):
+        ok = SheetDB.save(
+            AnnouncementService.WORKSHEET_NAME,
+            AnnouncementService.COLUMNS,
+            records,
+        )
+
+        if not ok:
             st.session_state.announcements_fallback = records
+
+        return ok
 
     @staticmethod
     def get_active():
@@ -580,7 +589,17 @@ class AnnouncementService:
             "pinned": bool_text(pinned), "active": "TRUE", "attachment_name": attachment_name,
             "attachment_type": attachment_type, "attachment_base64": attachment_base64, "seen_by": "",
         })
-        AnnouncementService.save_all(records)
+
+        ok = AnnouncementService.save_all(records)
+        if not ok:
+            raise RuntimeError(
+                st.session_state.get(
+                    "sheet_db_error",
+                    "Google Sheet 寫入失敗，公告只暫存在本次執行階段。",
+                )
+            )
+
+        return True
 
     @staticmethod
     def update_flag(announcement_id, field, value):
