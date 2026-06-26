@@ -67,28 +67,38 @@ class SheetDB:
             st.session_state["sheet_db_error"] = f"Secrets讀取失敗：{e}"
             return None
 
-    @staticmethod
-    def spreadsheet():
-        try:
-            service_account_info = SheetDB.get_service_account_info()
-            
-            if not sheet_id:
-                st.session_state["sheet_db_error"] = "找不到 SHEET_ID"
-                return None
-            
-            if not service_account_info:
-                st.session_state["sheet_db_error"] = "找不到 gcp_service_account"
-                return None
+@staticmethod
+def spreadsheet():
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
 
-            # Streamlit Secrets 回傳的是特殊 dict-like 物件，轉成純 dict + JSON 字串後再做快取。
-            service_account_json = json.dumps(dict(service_account_info), sort_keys=True)
-            spreadsheet = _cached_spreadsheet(str(sheet_id).strip(), service_account_json)
-            st.session_state.pop("sheet_db_error", None)
-            return spreadsheet
-        except Exception as e:
-            st.session_state["sheet_db_error"] = str(e)
+        # 取得設定
+        sheet_id = SheetDB.get_sheet_id()
+        service_account_info = SheetDB.get_service_account_info()
+
+        if not sheet_id:
+            st.session_state["sheet_db_error"] = "找不到 SHEET_ID"
             return None
 
+        if not service_account_info:
+            st.session_state["sheet_db_error"] = "找不到 gcp_service_account"
+            return None
+
+        credentials = Credentials.from_service_account_info(
+            service_account_info,
+            scopes=SheetDB.SCOPES
+        )
+
+        client = gspread.authorize(credentials)
+
+        spreadsheet = client.open_by_key(sheet_id)
+
+        return spreadsheet
+
+    except Exception as e:
+        st.session_state["sheet_db_error"] = str(e)
+        return None
     @staticmethod
     def clear_cache():
         try:
