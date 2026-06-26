@@ -42,10 +42,9 @@ else:
     load_df = TaskService.calculate_team_capacity()
 
     st.dataframe(
-        load_df.style.background_gradient(
-            subset=['總負載權重'],
-            cmap='Reds'
-        ),
+    load_df,
+    width="stretch"
+    ),
         use_container_width=True
     )
 
