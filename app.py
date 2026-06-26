@@ -2,12 +2,12 @@ import streamlit as st
 from utils import AppInitializer, ViewComponents
 
 # 1. 統籌全局設定
-st.set_page_config(page_title="開發工程部平台", layout="wide")
+st.set_page_config(page_title="StreamFlow 專業系統", layout="wide")
 
 # 2. 確保環境初始化
 AppInitializer.setup()
 
-# 3. 側邊欄：全域操作者與快速建立任務
+# 3. 側邊欄：操作者需先決定，布告欄才可判斷管理員權限與新公告提醒
 st.sidebar.title("導覽控制")
 st.session_state.current_user = st.sidebar.selectbox(
     "👤 當前操作者",
@@ -16,6 +16,28 @@ st.session_state.current_user = st.sidebar.selectbox(
     if st.session_state.current_user in st.session_state.partners else 0,
 )
 
+# 4. 呈現首頁/大門頁面
+st.title("🚀 歡迎使用 StreamFlow 專業任務管理系統")
+st.write("---")
+st.write("這是一個整合了專案管理、會議系統、簽核流程與效率分析的企業級儀表板。")
+st.write("請使用側邊欄選擇功能模組。")
+
+# 5. 首頁企業布告欄
+ViewComponents.render_announcement_board()
+
+st.write("---")
+
+# 6. 顯示當前系統概況
+st.subheader("系統狀態概覽")
+metric1, metric2, metric3 = st.columns(3)
+with metric1:
+    st.metric("目前任務總數", len(st.session_state.tasks))
+with metric2:
+    st.metric("有效公告數", ViewComponents.get_active_announcement_count())
+with metric3:
+    st.metric("目前使用者", st.session_state.current_user)
+
+# 7. 快速建立任務
 st.sidebar.divider()
 if st.sidebar.button("📝 快速建立任務", use_container_width=True):
     st.session_state.show_add_task = True
@@ -35,24 +57,15 @@ if st.session_state.get("show_add_task", False):
             with col2:
                 t_urg = st.selectbox("緊急度", ["高", "低"])
 
-            submit_col, cancel_col = st.columns(2)
-            with submit_col:
-                submitted = st.form_submit_button("建立任務", use_container_width=True)
-            with cancel_col:
-                cancelled = st.form_submit_button("取消", use_container_width=True)
-
-            if submitted and t_title:
+            if st.form_submit_button("建立任務") and t_title:
                 from utils import StreamFlowEngine as engine
-
                 new_t = {
-                    "id": max([t["id"] for t in st.session_state.tasks], default=0) + 1,
+                    "id": len(st.session_state.tasks) + 1,
                     "title": t_title,
                     "category": t_cat,
                     "due": t_due,
                     "assignees": t_assign,
                     "status": "Active",
-                    "progress": 0,
-                    "hours_spent": 0.0,
                     "importance": t_imp,
                     "urgency": t_urg,
                     "history": [],
@@ -61,28 +74,3 @@ if st.session_state.get("show_add_task", False):
                 st.session_state.tasks.append(new_t)
                 st.session_state.show_add_task = False
                 st.rerun()
-
-            if cancelled:
-                st.session_state.show_add_task = False
-                st.rerun()
-
-# 4. 首頁主內容
-st.title("🚀 開發工程部平台")
-st.write("---")
-st.write("整合專案任務、會議管理、簽核流程與效率分析的部門管理平台。")
-st.write("請使用左側選單切換功能模組。")
-
-# 5. 首頁布告欄
-ViewComponents.render_announcement_board()
-
-st.divider()
-
-# 6. 系統狀態概覽
-st.subheader("系統狀態概覽")
-metric1, metric2, metric3 = st.columns(3)
-with metric1:
-    st.metric("目前任務總數", len(st.session_state.tasks))
-with metric2:
-    st.metric("布告欄公告數", len(st.session_state.announcements))
-with metric3:
-    st.metric("目前使用者", st.session_state.current_user)
