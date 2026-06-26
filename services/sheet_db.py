@@ -26,6 +26,29 @@ def _cached_spreadsheet(sheet_id: str, service_account_json: str):
     return client.open_by_key(sheet_id)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def _cached_sheet_records(name: str, columns_json: str, default_rows_json: str, cache_version: int):
+    """Read and cache one worksheet for a short time.
+
+    Google Sheet is the slowest part of the app.  This cache reduces repeated
+    API reads during one Streamlit rerun/page switch while still refreshing
+    automatically within 30 seconds.  cache_version is increased after writes
+    so new data appears immediately after append/save/update operations.
+    """
+    columns = json.loads(columns_json)
+    default_rows = json.loads(default_rows_json) if default_rows_json else None
+
+    ws = SheetDB.worksheet(name, columns, default_rows)
+    if not ws:
+        return None
+
+    records = SheetDB.get_records(ws, columns)
+    if not records and default_rows:
+        SheetDB.save(name, columns, default_rows)
+        records = default_rows
+    return SheetDB.normalize_records(records, columns)
+
+
 class SheetDB:
     SCOPES = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -210,9 +233,26 @@ class SheetDB:
             _cached_spreadsheet.clear()
         except Exception:
             pass
+        try:
+            _cached_sheet_records.clear()
+        except Exception:
+            pass
+        st.session_state["sheet_db_cache_version"] = st.session_state.get("sheet_db_cache_version", 0) + 1
         st.session_state.pop("sheet_db_error", None)
         st.session_state.pop("sheet_db_connected", None)
         st.session_state.pop("sheet_db_title", None)
+
+    @staticmethod
+    def cache_version() -> int:
+        return int(st.session_state.get("sheet_db_cache_version", 0))
+
+    @staticmethod
+    def bump_cache_version():
+        st.session_state["sheet_db_cache_version"] = SheetDB.cache_version() + 1
+        try:
+            _cached_sheet_records.clear()
+        except Exception:
+            pass
 
     @staticmethod
     def using_google_sheet() -> bool:
@@ -299,15 +339,16 @@ class SheetDB:
 
     @staticmethod
     def load(name: str, columns: list[str], default_rows: list[dict[str, Any]] | None = None) -> list[dict[str, Any]] | None:
-        ws = SheetDB.worksheet(name, columns, default_rows)
-        if not ws:
-            return None
         try:
-            records = SheetDB.get_records(ws, columns)
-            if not records and default_rows:
-                SheetDB.save(name, columns, default_rows)
-                records = default_rows
-            return SheetDB.normalize_records(records, columns)
+            columns_json = json.dumps(columns, ensure_ascii=False)
+            default_rows_json = json.dumps(default_rows or [], ensure_ascii=False, default=str)
+            records = _cached_sheet_records(
+                name,
+                columns_json,
+                default_rows_json,
+                SheetDB.cache_version(),
+            )
+            return records
         except Exception as e:
             SheetDB._set_error(f"讀取工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
             return None
@@ -326,6 +367,7 @@ class SheetDB:
             ])
             ws.clear()
             SheetDB.update_values(ws, "A1", values)
+            SheetDB.bump_cache_version()
             return True
         except Exception as e:
             SheetDB._set_error(f"寫入工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
@@ -339,6 +381,7 @@ class SheetDB:
         try:
             row = {col: record.get(col, "") for col in columns}
             ws.append_row([SheetDB.to_sheet_value(row.get(col, "")) for col in columns])
+            SheetDB.bump_cache_version()
             return True
         except Exception as e:
             SheetDB._set_error(f"追加工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
