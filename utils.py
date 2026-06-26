@@ -251,8 +251,10 @@ class UserService:
         ]
 
     @staticmethod
+    @staticmethod
+    @staticmethod
     def using_google_sheet():
-        return SheetDB.worksheet(UserService.WORKSHEET_NAME, UserService.COLUMNS, UserService.default_users()) is not None
+        return SheetDB.spreadsheet() is not None
 
     @staticmethod
     def load_all():
