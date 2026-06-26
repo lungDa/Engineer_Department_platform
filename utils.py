@@ -774,7 +774,7 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info("目前版本已取消全站登入。新增/發布資料時才驗證工號與密碼。")
+        st.sidebar.info("目前版本v1.04(新增/發布資料時才驗證工號與密碼。)")
         if not UserService.using_google_sheet():
             st.sidebar.warning("未偵測到 Google Sheet，資料會暫存在本次執行階段。")
             if st.session_state.get("sheet_db_error"):
