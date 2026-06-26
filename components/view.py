@@ -135,9 +135,24 @@ class ViewComponents:
                             st.error(msg)
                         else:
                             author = publisher.get("name") or publisher.get("account") or publisher_account
-                            AnnouncementService.create(title, content, level, expires_at, pinned, attachment, author=author, account=publisher.get("account", publisher_account))
-                            st.success(f"公告已發布並寫入布告欄。發布人：{author}")
-                            st.rerun()
+                            try:
+                                AnnouncementService.create(
+                                    title,
+                                    content,
+                                    level,
+                                    expires_at,
+                                    pinned,
+                                    attachment,
+                                    author=author,
+                                    account=publisher.get("account", publisher_account),
+                                )
+                                st.success(f"✅ 公告已成功寫入 Google Sheet。發布人：{author}")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ 公告寫入 Google Sheet 失敗：{e}")
+                                if st.session_state.get("sheet_db_error"):
+                                    with st.expander("Google Sheet 寫入錯誤詳情", expanded=False):
+                                        st.code(str(st.session_state.get("sheet_db_error")), language="text")
 
         if not announcements:
             st.info("目前沒有有效公告。")
