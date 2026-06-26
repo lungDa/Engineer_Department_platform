@@ -12,7 +12,7 @@ ViewComponents.render_login_gate()
 ViewComponents.render_user_sidebar()
 
 # 4. 呈現首頁/大門頁面
-st.title("🚀 歡迎使用 鋒霈環境工程部專業任務管理系統")
+st.title("🚀 歡迎使用 鋒霈  工程部  專業任務管理系統")
 st.write("---")
 st.write("這是一個整合了專案管理、會議系統、簽核流程與效率分析的企業級儀表板。")
 st.write("請使用側邊欄選擇功能模組。")
