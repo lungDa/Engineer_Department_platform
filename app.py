@@ -1,5 +1,5 @@
 import streamlit as st
-from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDiagnostics
+from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDiagnostics, SheetDB
 
 st.set_page_config(page_title="鋒霈 工程部 專業系統", layout="wide")
 
@@ -11,17 +11,25 @@ st.write("---")
 st.write("這是一個整合了專案管理、會議系統、簽核流程與效率分析的企業級儀表板。")
 st.write("請使用側邊欄選擇功能模組。")
 
-with st.expander("🩺 Google Sheet 連線診斷", expanded=False):
+with st.expander("🩺 Google Sheet 連線診斷", expanded=True):
+    if st.button("重新測試連線並清除快取", width="stretch"):
+        SheetDB.clear_cache()
+        st.rerun()
+
     status = SheetDiagnostics.status()
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("SHEET_ID", "OK" if status["sheet_id_present"] else "未讀到")
     c2.metric("Service Account", "OK" if status["service_account_present"] else "未讀到")
-    c3.metric("連線", "OK" if status["connected"] else "失敗")
+    c3.metric("金鑰格式", "OK" if status.get("service_account_valid") else "異常")
+    c4.metric("連線", "OK" if status["connected"] else "失敗")
     st.caption(f"Sheet ID：{status['sheet_id'] or '-'}")
     st.caption(f"Service Account：{status['client_email'] or '-'}")
     st.caption(f"Spreadsheet：{status['spreadsheet_title'] or '-'}")
     if status["error"]:
-        st.error(status["error"])
+        st.error("Google Sheet 連線失敗，詳細訊息如下：")
+        st.code(status["error"], language="text")
+    elif status["connected"]:
+        st.success("Google Sheet 已成功連線。")
 
 ViewComponents.render_announcement_board()
 
