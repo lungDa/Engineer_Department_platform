@@ -53,9 +53,9 @@ class UserService:
     def default_users():
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         return [
-            {"id": 1, "name": "闕老師", "account": "admin", "password": UserService.DEFAULT_PASSWORD, "role": "管理員", "role_level": 2, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
-            {"id": 2, "name": "王大明", "account": "wang", "password": UserService.DEFAULT_PASSWORD, "role": "主管", "role_level": 1, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
-            {"id": 3, "name": "陳小華", "account": "chen", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 1, "name": "開發者", "account": "admin", "password": UserService.DEFAULT_PASSWORD, "role": "管理員", "role_level": 2, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 2, "name": "廖郁仁", "account": "243", "password": UserService.DEFAULT_PASSWORD, "role": "主管", "role_level": 2, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 3, "name": "梁綺雯", "account": "355", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 2, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
             {"id": 4, "name": "林志玲", "account": "lin", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
         ]
 
