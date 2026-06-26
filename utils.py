@@ -38,67 +38,139 @@ class SheetDB:
     ]
 
     @staticmethod
+    def _to_plain_dict(value):
+        """將 Streamlit Secrets 的 AttrDict 轉成一般 dict。"""
+        if value is None:
+            return None
+        try:
+            return {k: SheetDB._to_plain_dict(v) for k, v in dict(value).items()}
+        except Exception:
+            return value
+
+    @staticmethod
+    def _normalize_private_key(info: dict) -> dict:
+        """修正常見 private_key 格式問題：\n -> 換行、缺 PEM 標頭時自動補上。"""
+        info = dict(info or {})
+        key = str(info.get("private_key", "")).strip()
+        if key:
+            key = key.replace("\\n", "\n")
+            if "-----BEGIN PRIVATE KEY-----" not in key and key.startswith("MII"):
+                key = "-----BEGIN PRIVATE KEY-----\n" + key + "\n-----END PRIVATE KEY-----\n"
+            info["private_key"] = key
+        return info
+
+    @staticmethod
     def get_sheet_id():
         try:
-            return st.secrets.get("google_sheet", {}).get("spreadsheet_id") or st.secrets.get("SHEET_ID")
-        except Exception:
-            return os.getenv("SHEET_ID")
+            # 支援三種常見 Secrets 結構：
+            # 1) SHEET_ID = "..."
+            # 2) [google_sheet] spreadsheet_id = "..."
+            # 3) [connections.gsheets] spreadsheet = "..."
+            if "SHEET_ID" in st.secrets and str(st.secrets["SHEET_ID"]).strip():
+                return str(st.secrets["SHEET_ID"]).strip()
+
+            if "SPREADSHEET_ID" in st.secrets and str(st.secrets["SPREADSHEET_ID"]).strip():
+                return str(st.secrets["SPREADSHEET_ID"]).strip()
+
+            if "google_sheet" in st.secrets:
+                google_sheet = SheetDB._to_plain_dict(st.secrets["google_sheet"]) or {}
+                value = google_sheet.get("spreadsheet_id") or google_sheet.get("SHEET_ID")
+                if value:
+                    return str(value).strip()
+
+            if "connections" in st.secrets:
+                connections = SheetDB._to_plain_dict(st.secrets["connections"]) or {}
+                gsheets = connections.get("gsheets", {}) or {}
+                value = gsheets.get("spreadsheet") or gsheets.get("spreadsheet_id") or gsheets.get("SHEET_ID")
+                if value:
+                    return str(value).strip()
+
+            env_value = os.getenv("SHEET_ID") or os.getenv("SPREADSHEET_ID")
+            return str(env_value).strip() if env_value else None
+        except Exception as e:
+            st.session_state["sheet_db_error"] = f"SHEET_ID 讀取失敗：{e}"
+            return None
 
     @staticmethod
     def get_service_account_info():
         try:
+            # 1) 推薦格式：[gcp_service_account]
             if "gcp_service_account" in st.secrets:
-                return dict(st.secrets["gcp_service_account"])
-    
-            return {
-                "type": st.secrets["type"],
-                "project_id": st.secrets["project_id"],
-                "private_key_id": st.secrets["private_key_id"],
-                "private_key": st.secrets["private_key"],
-                "client_email": st.secrets["client_email"],
-                "client_id": st.secrets["client_id"],
-                "auth_uri": st.secrets["auth_uri"],
-                "token_uri": st.secrets["token_uri"],
-                "auth_provider_x509_cert_url": st.secrets["auth_provider_x509_cert_url"],
-                "client_x509_cert_url": st.secrets["client_x509_cert_url"],
-                "universe_domain": st.secrets.get("universe_domain", "googleapis.com"),
-            }
+                info = SheetDB._to_plain_dict(st.secrets["gcp_service_account"])
+                return SheetDB._normalize_private_key(info)
+
+            # 2) Streamlit 內建 connection 格式：[connections.gsheets]
+            if "connections" in st.secrets:
+                connections = SheetDB._to_plain_dict(st.secrets["connections"]) or {}
+                gsheets = connections.get("gsheets", {}) or {}
+                required = ["type", "project_id", "private_key_id", "private_key", "client_email", "client_id"]
+                if all(gsheets.get(k) for k in required):
+                    info = {
+                        "type": gsheets.get("type"),
+                        "project_id": gsheets.get("project_id"),
+                        "private_key_id": gsheets.get("private_key_id"),
+                        "private_key": gsheets.get("private_key"),
+                        "client_email": gsheets.get("client_email"),
+                        "client_id": gsheets.get("client_id"),
+                        "auth_uri": gsheets.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
+                        "token_uri": gsheets.get("token_uri", "https://oauth2.googleapis.com/token"),
+                        "auth_provider_x509_cert_url": gsheets.get("auth_provider_x509_cert_url", "https://www.googleapis.com/oauth2/v1/certs"),
+                        "client_x509_cert_url": gsheets.get("client_x509_cert_url", ""),
+                        "universe_domain": gsheets.get("universe_domain", "googleapis.com"),
+                    }
+                    return SheetDB._normalize_private_key(info)
+
+            # 3) 平面格式：type/project_id/private_key... 直接放最外層
+            required = ["type", "project_id", "private_key_id", "private_key", "client_email", "client_id"]
+            if all(k in st.secrets and st.secrets.get(k) for k in required):
+                info = {
+                    "type": st.secrets.get("type"),
+                    "project_id": st.secrets.get("project_id"),
+                    "private_key_id": st.secrets.get("private_key_id"),
+                    "private_key": st.secrets.get("private_key"),
+                    "client_email": st.secrets.get("client_email"),
+                    "client_id": st.secrets.get("client_id"),
+                    "auth_uri": st.secrets.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
+                    "token_uri": st.secrets.get("token_uri", "https://oauth2.googleapis.com/token"),
+                    "auth_provider_x509_cert_url": st.secrets.get("auth_provider_x509_cert_url", "https://www.googleapis.com/oauth2/v1/certs"),
+                    "client_x509_cert_url": st.secrets.get("client_x509_cert_url", ""),
+                    "universe_domain": st.secrets.get("universe_domain", "googleapis.com"),
+                }
+                return SheetDB._normalize_private_key(info)
+
+            st.session_state["sheet_db_error"] = "找不到 gcp_service_account 或 connections.gsheets 服務帳號設定。"
+            return None
         except Exception as e:
-            st.session_state["sheet_db_error"] = f"Secrets讀取失敗：{e}"
+            st.session_state["sheet_db_error"] = f"Secrets 服務帳號讀取失敗：{e}"
             return None
 
-@staticmethod
-def spreadsheet():
-    try:
-        import gspread
-        from google.oauth2.service_account import Credentials
+    @staticmethod
+    def spreadsheet():
+        try:
+            sheet_id = SheetDB.get_sheet_id()
+            service_account_info = SheetDB.get_service_account_info()
 
-        # 取得設定
-        sheet_id = SheetDB.get_sheet_id()
-        service_account_info = SheetDB.get_service_account_info()
+            if not sheet_id:
+                st.session_state["sheet_db_error"] = "找不到 SHEET_ID / spreadsheet_id / connections.gsheets.spreadsheet。"
+                return None
 
-        if not sheet_id:
-            st.session_state["sheet_db_error"] = "找不到 SHEET_ID"
+            if not service_account_info:
+                # get_service_account_info 已寫入更詳細錯誤。
+                st.session_state.setdefault("sheet_db_error", "找不到 Google Service Account 設定。")
+                return None
+
+            service_account_json = json.dumps(
+                SheetDB._normalize_private_key(service_account_info),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            spreadsheet = _cached_spreadsheet(str(sheet_id).strip(), service_account_json)
+            st.session_state.pop("sheet_db_error", None)
+            return spreadsheet
+        except Exception as e:
+            st.session_state["sheet_db_error"] = str(e)
             return None
 
-        if not service_account_info:
-            st.session_state["sheet_db_error"] = "找不到 gcp_service_account"
-            return None
-
-        credentials = Credentials.from_service_account_info(
-            service_account_info,
-            scopes=SheetDB.SCOPES
-        )
-
-        client = gspread.authorize(credentials)
-
-        spreadsheet = client.open_by_key(sheet_id)
-
-        return spreadsheet
-
-    except Exception as e:
-        st.session_state["sheet_db_error"] = str(e)
-        return None
     @staticmethod
     def clear_cache():
         try:
@@ -202,11 +274,10 @@ def spreadsheet():
         ws = SheetDB.worksheet(name, columns)
         normalized = SheetDB.normalize_records(records, columns)
         if not ws:
-            st.session_state["sheet_db_error"] = st.session_state.get("sheet_db_error") or f"無法取得工作表：{name}"
             return False
-        values = [columns]
-        values.extend([[SheetDB.to_sheet_value(row.get(col, "")) for col in columns] for row in normalized])
         try:
+            values = [columns]
+            values.extend([[SheetDB.to_sheet_value(row.get(col, "")) for col in columns] for row in normalized])
             ws.clear()
             SheetDB.update_values(ws, "A1", values)
             st.session_state.pop("sheet_db_error", None)
@@ -214,7 +285,6 @@ def spreadsheet():
         except Exception as e:
             st.session_state["sheet_db_error"] = f"寫入工作表 {name} 失敗：{e}"
             return False
-
 
 def now_text():
     return datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -841,7 +911,7 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info("目前版本v1.05(Google Sheet 快取優化版；新增/發布資料時驗證工號與密碼。)")
+        st.sidebar.info("目前版本v1.06(Google Sheet 連線穩定版；新增/發布資料時驗證工號與密碼。)")
         sheet = SheetDB.spreadsheet()
         if sheet is None:
             st.sidebar.warning("未偵測到 Google Sheet，資料會暫存在本次執行階段。")
