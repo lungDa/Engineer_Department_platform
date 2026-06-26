@@ -436,8 +436,8 @@ class ViewComponents:
         if st.session_state.get("auth_user"):
             return True
 
-        st.title("🔐 開發工程部平台登入")
-        st.caption("請使用人員帳號與密碼登入。預設密碼為 0000，首次登入後請立即修改。")
+        st.title("🔐 鋒霈環境工程部平台登入")
+        st.caption("請使用人員帳號(打工號數字)與密碼登入。預設密碼為 0000，首次登入後請立即修改。")
 
         with st.container(border=True):
             with st.form("login_form"):
