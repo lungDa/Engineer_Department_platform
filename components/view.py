@@ -51,7 +51,7 @@ class ViewComponents:
                 err = str(status.get("error"))
                 st.sidebar.caption("連線訊息：" + err[:500])
             else:
-                st.sidebar.caption("連線訊息：未知錯誤，請展開首頁 Google Sheet 連線診斷。")
+                st.sidebar.caption("連線訊息：未知錯誤，請由開發者開啟首頁診斷工具。")
         if st.sidebar.button("重新測試 Google Sheet 連線", width="stretch"):
             SheetDB.clear_cache()
             st.rerun()
