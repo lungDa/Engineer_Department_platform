@@ -547,7 +547,7 @@ class ViewComponents:
 
         title_col, status_col = st.columns([5, 2])
         with title_col:
-            st.subheader("📢 開發工程部布告欄")
+            st.subheader("📢 鋒霈環境工程部布告欄")
         with status_col:
             if unread_count > 0:
                 st.warning(f"🔔 你有 {unread_count} 則新公告")
