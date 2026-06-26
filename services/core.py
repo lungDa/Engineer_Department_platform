@@ -74,7 +74,7 @@ class AppInitializer:
         st.session_state.setdefault("approvals_fallback", ApprovalService.default_approvals())
 
         users = UserService.get_active_users()
-        st.session_state.partners = [u.get("name", "") for u in users if u.get("name", "")]
+        st.session_state.partners = UserService.get_partner_names()
         st.session_state.roles = {u.get("name", ""): parse_int(u.get("role_level", 0), 0) for u in users}
 
         st.session_state.categories = CategoryService.load_names()
@@ -126,6 +126,22 @@ class UserService:
     @staticmethod
     def get_active_users():
         return [u for u in UserService.load_all() if bool_text(u.get("active", "TRUE")) == "TRUE"]
+
+    @staticmethod
+    def get_partner_names() -> list[str]:
+        """Return active user display names from the Users Google Sheet.
+
+        This is the single source for all assignee / attendee / signer dropdowns.
+        Duplicate or blank names are removed, and the result is sorted for stable UI.
+        """
+        names = []
+        seen = set()
+        for user in UserService.get_active_users():
+            name = str(user.get("name", "")).strip()
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+        return sorted(names)
 
     @staticmethod
     def get_by_account(account):
@@ -339,7 +355,7 @@ class TaskService:
     @staticmethod
     def add_task(task, author=None, account=None):
         records = TaskService.load_all()
-        next_id = max([parse_int(t.get("id"), 0) for t in records], default=0) + 1
+        next_id = max([parse_int(t.get("id", 0), 0) for t in records], default=0) + 1
         now = now_text()
         task.update({
             "id": next_id,
@@ -348,9 +364,15 @@ class TaskService:
             "created_at": now,
             "updated_at": now,
         })
+        row = TaskService._to_sheet(task)
+        ok = SheetDB.append(TaskService.WORKSHEET_NAME, TaskService.COLUMNS, row)
+        if not ok:
+            records.append(task)
+            st.session_state.tasks_fallback = records
+            raise RuntimeError(st.session_state.get("sheet_db_error", "Google Sheet 任務寫入失敗"))
         records.append(task)
-        TaskService.save_all(records)
         st.session_state.tasks = records
+        return True
 
     @staticmethod
     def get_filtered_tasks(f_assignees, f_tags, tasks=None):
@@ -375,7 +397,7 @@ class TaskService:
     def calculate_team_capacity():
         active_tasks = [t for t in st.session_state.tasks if t.get("status") == "Active"]
         load_data = []
-        for p in st.session_state.partners:
+        for p in UserService.get_partner_names():
             active_count = len([t for t in active_tasks if p in t.get("assignees", []) and t.get("category") == "進行中"])
             ready_count = len([t for t in active_tasks if p in t.get("assignees", []) and t.get("category") == "待辦事項"])
             weight = (active_count * 1.0) + (ready_count * 0.3)
@@ -432,9 +454,15 @@ class MeetingService:
             "created_at": now,
             "updated_at": now,
         })
+        row = MeetingService._to_sheet(meeting)
+        ok = SheetDB.append(MeetingService.WORKSHEET_NAME, MeetingService.COLUMNS, row)
+        if not ok:
+            records.append(meeting)
+            st.session_state.meetings_fallback = records
+            raise RuntimeError(st.session_state.get("sheet_db_error", "Google Sheet 會議寫入失敗"))
         records.append(meeting)
-        MeetingService.save_all(records)
         st.session_state.meetings = records
+        return True
 
     @staticmethod
     def get_visible_meetings(target_date=None):
@@ -492,9 +520,15 @@ class ApprovalService:
             "created_at": now,
             "updated_at": now,
         })
+        row = ApprovalService._to_sheet(approval)
+        ok = SheetDB.append(ApprovalService.WORKSHEET_NAME, ApprovalService.COLUMNS, row)
+        if not ok:
+            records.append(approval)
+            st.session_state.approvals_fallback = records
+            raise RuntimeError(st.session_state.get("sheet_db_error", "Google Sheet 簽核寫入失敗"))
         records.append(approval)
-        ApprovalService.save_all(records)
         st.session_state.approvals = records
+        return True
 
     @staticmethod
     def process_action(approval, action, reason="", signer_name=None, transfer_to=None):
@@ -582,16 +616,29 @@ class AnnouncementService:
             attachment_name = attachment.name
             attachment_type = attachment.type or "application/octet-stream"
             attachment_base64 = base64.b64encode(data).decode("utf-8")
-        records.append({
-            "id": next_id, "title": title.strip(), "content": content.strip(), "level": level,
-            "author": author or "未指定", "author_account": account or "", "created_at": now_text(),
-            "expires_at": expires_at.strftime("%Y-%m-%d") if expires_at else "",
-            "pinned": bool_text(pinned), "active": "TRUE", "attachment_name": attachment_name,
-            "attachment_type": attachment_type, "attachment_base64": attachment_base64, "seen_by": "",
-        })
 
-        ok = AnnouncementService.save_all(records)
+        row = {
+            "id": next_id,
+            "title": title.strip(),
+            "content": content.strip(),
+            "level": level,
+            "author": author or "未指定",
+            "author_account": account or "",
+            "created_at": now_text(),
+            "expires_at": expires_at.strftime("%Y-%m-%d") if expires_at else "",
+            "pinned": bool_text(pinned),
+            "active": "TRUE",
+            "attachment_name": attachment_name,
+            "attachment_type": attachment_type,
+            "attachment_base64": attachment_base64,
+            "seen_by": "",
+        }
+
+        ok = SheetDB.append(AnnouncementService.WORKSHEET_NAME, AnnouncementService.COLUMNS, row)
         if not ok:
+            fallback = st.session_state.get("announcements_fallback", records)
+            fallback.append(row)
+            st.session_state.announcements_fallback = fallback
             raise RuntimeError(
                 st.session_state.get(
                     "sheet_db_error",
