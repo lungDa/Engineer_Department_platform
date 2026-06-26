@@ -2,13 +2,13 @@ import streamlit as st
 from utils import AppInitializer
 
 # 1. 統籌全局設定
-st.set_page_config(page_title="StreamFlow 專業系統", layout="wide")
+st.set_page_config(page_title="鋒霈環境工程部專業系統", layout="wide")
 
 # 2. 確保環境初始化 (防禦性程式設計)
 AppInitializer.setup()
 
 # 3. 呈現首頁/大門頁面
-st.title("🚀 歡迎使用 StreamFlow 專業任務管理系統")
+st.title("🚀 歡迎使用 鋒霈環境工程部專業系統")
 st.write("---")
 st.write("這是一個整合了專案管理、會議系統、簽核流程與效率分析的企業級儀表板。")
 st.write("請使用側邊欄選擇功能模組。")
