@@ -2,7 +2,7 @@ import streamlit as st
 from utils import AppInitializer, ViewComponents
 
 # 1. 統籌全局設定
-st.set_page_config(page_title="StreamFlow 專業系統", layout="wide")
+st.set_page_config(page_title=" 鋒霈  工程部  專業系統", layout="wide")
 
 # 2. 確保環境初始化
 AppInitializer.setup()
