@@ -6,3 +6,4 @@ google-auth
 openpyxl
 python-dateutil
 numpy
+matplotlib
