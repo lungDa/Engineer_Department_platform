@@ -2,56 +2,166 @@ import streamlit as st
 from datetime import datetime
 
 
-# 在 utils.py 最上方加入這段
 class AppInitializer:
     @staticmethod
     def setup():
+        """初始化 StreamFlow 系統所需的 session_state。
+
+        採用逐項初始化，避免後續新增功能時，因為 tasks 已存在而漏建新狀態。
+        """
         from datetime import date, timedelta
-        if 'tasks' not in st.session_state:
-            st.session_state.tasks = [
-                {"id": 1, "title": "資料庫設計", "category": "進行中", "due": date.today()+timedelta(days=2), "assignees": ["王大明"], "status": "Active", "progress": 80, "hours_spent": 4.5, "importance": "高", "urgency": "高", "history": []},
-                {"id": 2, "title": "API 開發", "category": "待辦事項", "due": date.today()+timedelta(days=5), "assignees": ["陳小華"], "status": "Active", "progress": 0, "hours_spent": 0.0, "importance": "高", "urgency": "低", "history": []}
-            ]
-            st.session_state.partners = ["王大明", "陳小華", "林志玲", "闕老師"]
-            st.session_state.current_user = "闕老師"
-            st.session_state.roles = {"闕老師": 2, "王大明": 1, "陳小華": 0, "林志玲": 0}
-            st.session_state.categories = ["待辦事項", "進行中", "已完成"]
-            st.session_state.meetings = []
-            st.session_state.approvals = []
-            st.session_state.tags_list = ["設計", "開發", "測試"]
-            st.session_state.cal_year = date.today().year
-            st.session_state.cal_month = date.today().month
-            st.session_state.selected_date = date.today()
+
+        defaults = {
+            "tasks": [
+                {"id": 1, "title": "資料庫設計", "category": "進行中", "due": date.today() + timedelta(days=2), "assignees": ["王大明"], "status": "Active", "progress": 80, "hours_spent": 4.5, "importance": "高", "urgency": "高", "history": []},
+                {"id": 2, "title": "API 開發", "category": "待辦事項", "due": date.today() + timedelta(days=5), "assignees": ["陳小華"], "status": "Active", "progress": 0, "hours_spent": 0.0, "importance": "高", "urgency": "低", "history": []}
+            ],
+            "partners": ["王大明", "陳小華", "林志玲", "闕老師"],
+            "current_user": "闕老師",
+            "roles": {"闕老師": 2, "王大明": 1, "陳小華": 0, "林志玲": 0},
+            "categories": ["待辦事項", "進行中", "已完成"],
+            "meetings": [],
+            "approvals": [],
+            "tags_list": ["設計", "開發", "測試"],
+            "cal_year": date.today().year,
+            "cal_month": date.today().month,
+            "selected_date": date.today(),
+            "announcements": [
+                {
+                    "id": 1,
+                    "title": "系統上線公告",
+                    "content": "歡迎使用開發工程部平台。請由左側功能選單進入任務看板、會議系統與簽核中心。",
+                    "level": "一般",
+                    "author": "系統管理員",
+                    "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                    "pinned": True,
+                }
+            ],
+            "show_add_task": False,
+        }
+
+        for key, value in defaults.items():
+            if key not in st.session_state:
+                st.session_state[key] = value
+
 
 class ViewComponents:
     """可重用的 UI 元件"""
+
     @staticmethod
     def render_filters():
         with st.expander("🔍 進階多維度篩選器", expanded=False):
             c1, c2 = st.columns(2)
-            with c1: f_a = st.multiselect("篩選指派對象", st.session_state.partners)
-            with c2: f_t = st.multiselect("篩選標籤", st.session_state.tags_list)
+            with c1:
+                f_a = st.multiselect("篩選指派對象", st.session_state.partners)
+            with c2:
+                f_t = st.multiselect("篩選標籤", st.session_state.tags_list)
             return f_a, f_t
+
+    @staticmethod
+    def render_announcement_board():
+        """首頁布告欄：支援新增、置頂、刪除。"""
+        level_icon = {
+            "一般": "📌",
+            "重要": "⚠️",
+            "緊急": "🚨",
+            "維護": "🛠️",
+        }
+
+        st.subheader("📢 開發工程部布告欄")
+
+        with st.expander("➕ 新發布告", expanded=False):
+            with st.form("announcement_form", clear_on_submit=True):
+                title = st.text_input("公告標題")
+                content = st.text_area("公告內容", height=120)
+                c1, c2 = st.columns(2)
+                with c1:
+                    level = st.selectbox("公告等級", ["一般", "重要", "緊急", "維護"])
+                with c2:
+                    pinned = st.checkbox("置頂公告", value=False)
+
+                submitted = st.form_submit_button("發布公告", use_container_width=True)
+
+                if submitted:
+                    if not title.strip() or not content.strip():
+                        st.warning("請輸入公告標題與內容。")
+                    else:
+                        st.session_state.announcements.append({
+                            "id": max([a["id"] for a in st.session_state.announcements], default=0) + 1,
+                            "title": title.strip(),
+                            "content": content.strip(),
+                            "level": level,
+                            "author": st.session_state.current_user,
+                            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                            "pinned": pinned,
+                        })
+                        st.success("公告已發布。")
+                        st.rerun()
+
+        announcements = sorted(
+            st.session_state.announcements,
+            key=lambda a: (not a.get("pinned", False), -a.get("id", 0)),
+        )
+
+        if not announcements:
+            st.info("目前沒有公告。")
+            return
+
+        for ann in announcements:
+            icon = level_icon.get(ann.get("level", "一般"), "📌")
+            pinned_text = "｜置頂" if ann.get("pinned") else ""
+
+            with st.container(border=True):
+                st.markdown(f"### {icon} {ann['title']}")
+                st.caption(
+                    f"等級：{ann.get('level', '一般')}{pinned_text}｜"
+                    f"發布人：{ann.get('author', '未知')}｜"
+                    f"時間：{ann.get('created_at', '-') }"
+                )
+                st.write(ann.get("content", ""))
+
+                btn1, btn2, _ = st.columns([1, 1, 6])
+                with btn1:
+                    if st.button("置頂/取消", key=f"pin_ann_{ann['id']}"):
+                        for item in st.session_state.announcements:
+                            if item["id"] == ann["id"]:
+                                item["pinned"] = not item.get("pinned", False)
+                                break
+                        st.rerun()
+                with btn2:
+                    if st.button("刪除", key=f"del_ann_{ann['id']}"):
+                        st.session_state.announcements = [
+                            item for item in st.session_state.announcements
+                            if item["id"] != ann["id"]
+                        ]
+                        st.rerun()
+
 
 class StreamFlowEngine:
 
     @staticmethod
     def add_log(task, message):
         from datetime import datetime
-        if 'history' not in task: task['history'] = []
+        if 'history' not in task:
+            task['history'] = []
         task['history'].append(f"[{datetime.now().strftime('%m-%d %H:%M')}] {st.session_state.current_user} {message}")
+
 
 class TaskService:
     """處理所有與任務相關的邏輯"""
+
     @staticmethod
     def get_filtered_tasks(f_assignees, f_tags, tasks=None):
-        if tasks is None: tasks = st.session_state.tasks
+        if tasks is None:
+            tasks = st.session_state.tasks
         filtered = []
         for t in tasks:
-            if t['status'] != 'Active': continue
+            if t['status'] != 'Active':
+                continue
             match_assignee = (not f_assignees) or any(a in f_assignees for a in t.get('assignees', []))
             match_tag = (not f_tags) or (t.get('tags') in f_tags)
-            if match_assignee and match_tag: filtered.append(t)
+            if match_assignee and match_tag:
+                filtered.append(t)
         return filtered
 
     @staticmethod
@@ -71,6 +181,7 @@ class TaskService:
             load_data.append({"夥伴": p, "進行中(權重1.0)": active_count, "待辦(權重0.3)": ready_count, "總負載權重": round(weight, 1)})
         return pd.DataFrame(load_data)
 
+
 class MeetingService:
     @staticmethod
     def get_visible_meetings(target_date=None):
@@ -81,6 +192,7 @@ class MeetingService:
         if target_date:
             visible = [m for m in visible if m['time'] == target_date]
         return visible
+
 
 class ApprovalService:
     @staticmethod
