@@ -229,6 +229,7 @@ class AppInitializer:
         st.session_state.setdefault("cal_year", date.today().year)
         st.session_state.setdefault("cal_month", date.today().month)
         st.session_state.setdefault("selected_date", date.today())
+        st.session_state.setdefault("current_user", "訪客")
 
 
 
@@ -250,8 +251,6 @@ class UserService:
             {"id": 4, "name": "林志玲", "account": "lin", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
         ]
 
-    @staticmethod
-    @staticmethod
     @staticmethod
     def using_google_sheet():
         return SheetDB.spreadsheet() is not None
@@ -669,7 +668,7 @@ class AnnouncementService:
 
     @staticmethod
     def using_google_sheet():
-        return SheetDB.worksheet(AnnouncementService.WORKSHEET_NAME, AnnouncementService.COLUMNS) is not None
+        return SheetDB.spreadsheet() is not None
 
     @staticmethod
     def load_all():
@@ -777,7 +776,7 @@ class ViewComponents:
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
         st.sidebar.info("目前版本v1.04(新增/發布資料時才驗證工號與密碼。)")
-        if not UserService.using_google_sheet():
+        if not SheetDB.spreadsheet():
             st.sidebar.warning("未偵測到 Google Sheet，資料會暫存在本次執行階段。")
             if st.session_state.get("sheet_db_error"):
                 st.sidebar.caption(f"連線訊息：{st.session_state.sheet_db_error}")
@@ -826,8 +825,10 @@ class ViewComponents:
             else:
                 st.success("✅ 無未讀公告")
 
-        if not AnnouncementService.using_google_sheet():
+        if not SheetDB.spreadsheet():
             st.info("目前未偵測到 Google Sheet 設定，公告會暫存在本次執行階段。部署時請設定 Streamlit Secrets。")
+            if st.session_state.get("sheet_db_error"):
+                st.caption(f"Google Sheet 連線訊息：{st.session_state.sheet_db_error}")
 
         with st.expander("📣 發布公告（需輸入發布人工號與密碼）", expanded=False):
             with st.form("enterprise_announcement_form", clear_on_submit=True):
