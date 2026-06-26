@@ -441,7 +441,7 @@ class ViewComponents:
 
         with st.container(border=True):
             with st.form("login_form"):
-                account = st.text_input("帳號")
+                account = st.text_input("工號")
                 password = st.text_input("密碼", type="password")
                 submitted = st.form_submit_button("登入", use_container_width=True)
 
