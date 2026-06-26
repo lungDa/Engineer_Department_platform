@@ -41,7 +41,7 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info("目前版本 V3.1 Enterprise")
+        st.sidebar.info("目前版本 V3.3 Enterprise Performance Edition（Google Sheet 快取與寫入最佳化；新增/發布資料時驗證工號與密碼。）")
         status = SheetDiagnostics.status()
         if status.get("connected"):
             st.sidebar.success(f"Google Sheet 已連線：{status.get('spreadsheet_title', '')}")
