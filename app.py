@@ -7,14 +7,9 @@ st.set_page_config(page_title="StreamFlow 專業系統", layout="wide")
 # 2. 確保環境初始化
 AppInitializer.setup()
 
-# 3. 側邊欄：操作者需先決定，布告欄才可判斷管理員權限與新公告提醒
-st.sidebar.title("導覽控制")
-st.session_state.current_user = st.sidebar.selectbox(
-    "👤 當前操作者",
-    st.session_state.partners,
-    index=st.session_state.partners.index(st.session_state.current_user)
-    if st.session_state.current_user in st.session_state.partners else 0,
-)
+# 3. 登入驗證：人員資料由 Google Sheet Users 工作表維護
+ViewComponents.render_login_gate()
+ViewComponents.render_user_sidebar()
 
 # 4. 呈現首頁/大門頁面
 st.title("🚀 歡迎使用 StreamFlow 專業任務管理系統")
