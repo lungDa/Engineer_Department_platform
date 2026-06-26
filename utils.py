@@ -766,6 +766,7 @@ class ViewComponents:
         if st.session_state.partners:
             current = st.session_state.get("current_user") or st.session_state.partners[0]
             index = st.session_state.partners.index(current) if current in st.session_state.partners else 0
+            selected = st.sidebar.selectbox("目前操作人員（用於任務/會議紀錄）", st.session_state.partners, index=index)
             st.session_state.current_user = selected
         else:
             st.session_state.current_user = st.session_state.get("current_user") or "訪客"
