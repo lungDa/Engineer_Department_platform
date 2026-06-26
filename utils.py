@@ -68,16 +68,47 @@ class SheetDB:
         # 若表頭空白或不是範本欄位，補齊第一列，不刪既有資料。
         try:
             header = ws.row_values(1)
+            header = [h for h in header if str(h).strip()]
             if not header:
-                ws.update("A1", [columns])
+                SheetDB.update_values(ws, "A1", [columns])
             else:
                 missing = [c for c in columns if c not in header]
                 if missing:
                     fixed_header = header + missing
-                    ws.update("A1", [fixed_header])
+                    SheetDB.update_values(ws, "A1", [fixed_header])
         except Exception:
             pass
         return ws
+
+    @staticmethod
+    def update_values(ws, range_name: str, values: list[list[Any]]):
+        """gspread v5/v6 相容更新，避免 Worksheet.update 參數順序錯誤。"""
+        try:
+            return ws.update(values=values, range_name=range_name)
+        except TypeError:
+            return ws.update(range_name, values)
+
+    @staticmethod
+    def get_records(ws, columns: list[str]) -> list[dict[str, Any]]:
+        """安全讀取資料列：忽略 Google Sheet 範本後方空白欄，避免空白表頭造成錯誤。"""
+        values = ws.get_all_values()
+        if not values:
+            return []
+        header = [str(h).strip() for h in values[0]]
+        index_map = {col: header.index(col) for col in columns if col in header}
+        records = []
+        for raw in values[1:]:
+            row = {}
+            has_data = False
+            for col in columns:
+                idx = index_map.get(col)
+                val = raw[idx] if idx is not None and idx < len(raw) else ""
+                row[col] = val
+                if str(val).strip():
+                    has_data = True
+            if has_data:
+                records.append(row)
+        return records
 
     @staticmethod
     def to_sheet_value(value: Any) -> str:
@@ -101,7 +132,7 @@ class SheetDB:
         ws = SheetDB.worksheet(name, columns, default_rows)
         if not ws:
             return None
-        records = ws.get_all_records()
+        records = SheetDB.get_records(ws, columns)
         if not records and default_rows:
             SheetDB.save(name, columns, default_rows)
             records = default_rows
@@ -116,7 +147,7 @@ class SheetDB:
         values = [columns]
         values.extend([[SheetDB.to_sheet_value(row.get(col, "")) for col in columns] for row in normalized])
         ws.clear()
-        ws.update("A1", values)
+        SheetDB.update_values(ws, "A1", values)
         return True
 
 
