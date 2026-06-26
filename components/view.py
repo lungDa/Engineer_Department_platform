@@ -17,12 +17,16 @@ class ViewComponents:
 
     @staticmethod
     def render_filters():
+        # 指派對象一律即時讀取 Users 工作表，不再依賴固定 session 名單。
+        partner_options = UserService.get_partner_names()
+        tag_options = st.session_state.get("tags_list", [])
+
         with st.expander("🔍 進階多維度篩選器", expanded=False):
             c1, c2 = st.columns(2)
             with c1:
-                f_a = st.multiselect("篩選指派對象", st.session_state.partners)
+                f_a = st.multiselect("篩選指派對象", partner_options)
             with c2:
-                f_t = st.multiselect("篩選標籤", st.session_state.tags_list)
+                f_t = st.multiselect("篩選標籤", tag_options)
             return f_a, f_t
 
     @staticmethod
