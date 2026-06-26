@@ -53,19 +53,24 @@ if st.session_state.get("show_add_task", False):
                 t_urg = st.selectbox("緊急度", ["高", "低"])
 
             if st.form_submit_button("建立任務") and t_title:
-                from utils import StreamFlowEngine as engine
+                from utils import StreamFlowEngine as engine, TaskService
                 new_t = {
-                    "id": len(st.session_state.tasks) + 1,
                     "title": t_title,
                     "category": t_cat,
                     "due": t_due,
                     "assignees": t_assign,
                     "status": "Active",
+                    "progress": 0,
+                    "hours_spent": 0.0,
                     "importance": t_imp,
                     "urgency": t_urg,
+                    "tags": "",
+                    "notes": "",
+                    "depends_on": [],
                     "history": [],
                 }
                 engine.add_log(new_t, "透過側邊欄建立任務")
-                st.session_state.tasks.append(new_t)
+                TaskService.add_task(new_t)
                 st.session_state.show_add_task = False
+                st.success("任務已建立並寫入 Google Sheet。")
                 st.rerun()
