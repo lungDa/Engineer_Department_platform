@@ -436,7 +436,7 @@ class ViewComponents:
         if st.session_state.get("auth_user"):
             return True
 
-        st.title("🔐 鋒霈環境工程部平台登入")
+        st.title("🔐 鋒霈工程部 平台登入")
         st.caption("請使用人員帳號(打工號數字)與密碼登入。預設密碼為 0000，首次登入後請立即修改。")
 
         with st.container(border=True):
@@ -547,7 +547,7 @@ class ViewComponents:
 
         title_col, status_col = st.columns([5, 2])
         with title_col:
-            st.subheader("📢 鋒霈環境工程部布告欄")
+            st.subheader("📢 鋒霈 工程部布告欄")
         with status_col:
             if unread_count > 0:
                 st.warning(f"🔔 你有 {unread_count} 則新公告")
