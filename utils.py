@@ -845,7 +845,7 @@ class ViewComponents:
                 with c3:
                     pinned = st.checkbox("跑馬燈置頂", value=False)
                 attachment = st.file_uploader("附件（圖片 / PDF，建議 5MB 以下）", type=["png", "jpg", "jpeg", "pdf"])
-                submitted = st.form_submit_button("發布公告", use_container_width=True)
+                submitted = st.form_submit_button("發布公告", width="stretch")
                 if submitted:
                     if not publisher_account.strip() or not publisher_password:
                         st.warning("請輸入發布人的工號與密碼。")
