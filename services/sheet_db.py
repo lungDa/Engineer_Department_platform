@@ -1,11 +1,19 @@
 import json
 import os
+import traceback
 from typing import Any
 
 import streamlit as st
 
+
 @st.cache_resource(show_spinner=False)
 def _cached_spreadsheet(sheet_id: str, service_account_json: str):
+    """Create and cache a gspread Spreadsheet object.
+
+    The caller passes primitive strings only, so Streamlit can cache safely.
+    Exceptions are intentionally not swallowed here; SheetDB.spreadsheet()
+    catches them and stores full diagnostics for the UI.
+    """
     import gspread
     from google.oauth2.service_account import Credentials
 
@@ -25,8 +33,14 @@ class SheetDB:
     ]
 
     @staticmethod
+    def _set_error(message: str):
+        st.session_state["sheet_db_connected"] = False
+        st.session_state["sheet_db_error"] = message
+        return None
+
+    @staticmethod
     def _plain(value):
-        """把 Streamlit Secrets 的 AttrDict / 巢狀物件轉成一般 dict。"""
+        """Convert Streamlit secrets AttrDict / nested objects into plain dicts."""
         if value is None:
             return None
         if isinstance(value, dict):
@@ -43,9 +57,9 @@ class SheetDB:
         info = dict(info)
         key = str(info.get("private_key", "") or "").strip()
         if key:
-            # Streamlit TOML 若直接貼 JSON，常會保留文字 \n；這裡統一轉成真正換行。
+            # Streamlit TOML sometimes contains literal \n copied from JSON.
             key = key.replace("\\n", "\n")
-            # 若只貼中間 MII... 內容，嘗試自動補 PEM Header/Footer。
+            # If user pasted only the MII... body, recover PEM wrapper.
             if "-----BEGIN PRIVATE KEY-----" not in key and key.startswith("MII"):
                 key = "-----BEGIN PRIVATE KEY-----\n" + key + "\n-----END PRIVATE KEY-----\n"
             if not key.endswith("\n"):
@@ -55,23 +69,20 @@ class SheetDB:
 
     @staticmethod
     def get_sheet_id():
+        """Read spreadsheet id from several supported configurations."""
         try:
-            # 支援：SHEET_ID = "..."
             if "SHEET_ID" in st.secrets and str(st.secrets.get("SHEET_ID", "")).strip():
                 return str(st.secrets.get("SHEET_ID")).strip()
 
-            # 支援：SPREADSHEET_ID = "..."
             if "SPREADSHEET_ID" in st.secrets and str(st.secrets.get("SPREADSHEET_ID", "")).strip():
                 return str(st.secrets.get("SPREADSHEET_ID")).strip()
 
-            # 支援：[google_sheet] spreadsheet_id = "..."
             if "google_sheet" in st.secrets:
                 gs = SheetDB._plain(st.secrets.get("google_sheet")) or {}
                 value = gs.get("spreadsheet_id") or gs.get("SHEET_ID") or gs.get("spreadsheet")
                 if value:
                     return str(value).strip()
 
-            # 支援：[connections.gsheets] spreadsheet = "..."
             if "connections" in st.secrets:
                 connections = SheetDB._plain(st.secrets.get("connections")) or {}
                 gsheets = connections.get("gsheets", {}) or {}
@@ -83,21 +94,19 @@ class SheetDB:
             if env_value:
                 return str(env_value).strip()
 
-            st.session_state["sheet_db_error"] = "找不到 SHEET_ID。請在 Streamlit Secrets 設定 SHEET_ID。"
             return None
         except Exception as e:
-            st.session_state["sheet_db_error"] = f"讀取 SHEET_ID 失敗：{e}"
+            SheetDB._set_error(f"讀取 SHEET_ID 失敗：{e}")
             return None
 
     @staticmethod
     def get_service_account_info():
+        """Read service account info from supported Streamlit Secrets shapes."""
         try:
-            # 推薦格式：[gcp_service_account]
             if "gcp_service_account" in st.secrets:
                 info = SheetDB._plain(st.secrets.get("gcp_service_account"))
                 return SheetDB._normalize_private_key(info)
 
-            # Streamlit 內建格式：[connections.gsheets]
             if "connections" in st.secrets:
                 connections = SheetDB._plain(st.secrets.get("connections")) or {}
                 gsheets = connections.get("gsheets", {}) or {}
@@ -118,7 +127,6 @@ class SheetDB:
                     }
                     return SheetDB._normalize_private_key(info)
 
-            # 平面格式：type/project_id/private_key... 直接放最外層
             required = ["type", "project_id", "private_key_id", "private_key", "client_email", "client_id"]
             if all(k in st.secrets and st.secrets.get(k) for k in required):
                 info = {
@@ -136,25 +144,41 @@ class SheetDB:
                 }
                 return SheetDB._normalize_private_key(info)
 
-            st.session_state["sheet_db_error"] = "找不到 gcp_service_account。請在 Secrets 加入 [gcp_service_account] 區塊。"
             return None
         except Exception as e:
-            st.session_state["sheet_db_error"] = f"讀取 Service Account 失敗：{e}"
+            SheetDB._set_error(f"讀取 Service Account 失敗：{e}")
             return None
 
     @staticmethod
+    def _validate_service_account(info: dict | None) -> tuple[bool, str]:
+        if not info:
+            return False, "找不到 gcp_service_account。請在 Secrets 加入 [gcp_service_account] 區塊。"
+        required = [
+            "type", "project_id", "private_key_id", "private_key", "client_email", "client_id",
+            "auth_uri", "token_uri", "auth_provider_x509_cert_url", "client_x509_cert_url",
+        ]
+        missing = [k for k in required if not info.get(k)]
+        if missing:
+            return False, "Service Account 欄位缺少：" + ", ".join(missing)
+        key = str(info.get("private_key", ""))
+        if "-----BEGIN PRIVATE KEY-----" not in key or "-----END PRIVATE KEY-----" not in key:
+            return False, "private_key 不是有效 PEM 格式，請確認 BEGIN/END PRIVATE KEY 是否存在。"
+        return True, ""
+
+    @staticmethod
     def spreadsheet():
+        """Return gspread Spreadsheet object or None, with full diagnostics."""
+        sheet_id = SheetDB.get_sheet_id()
+        service_account_info = SheetDB.get_service_account_info()
+
+        if not sheet_id:
+            return SheetDB._set_error("找不到 SHEET_ID。請在 Streamlit Secrets 設定 SHEET_ID。")
+
+        ok, message = SheetDB._validate_service_account(service_account_info)
+        if not ok:
+            return SheetDB._set_error(message)
+
         try:
-            sheet_id = SheetDB.get_sheet_id()
-            service_account_info = SheetDB.get_service_account_info()
-
-            if not sheet_id:
-                st.session_state.setdefault("sheet_db_error", "找不到 SHEET_ID。")
-                return None
-            if not service_account_info:
-                st.session_state.setdefault("sheet_db_error", "找不到 Google Service Account 設定。")
-                return None
-
             service_account_json = json.dumps(
                 SheetDB._normalize_private_key(service_account_info),
                 ensure_ascii=False,
@@ -163,12 +187,22 @@ class SheetDB:
             spreadsheet = _cached_spreadsheet(str(sheet_id).strip(), service_account_json)
             st.session_state["sheet_db_connected"] = True
             st.session_state["sheet_db_title"] = getattr(spreadsheet, "title", "")
-            st.session_state.pop("sheet_db_error", None)
+            st.session_state["sheet_db_error"] = ""
             return spreadsheet
         except Exception as e:
-            st.session_state["sheet_db_connected"] = False
-            st.session_state["sheet_db_error"] = str(e)
-            return None
+            error_type = type(e).__name__
+            full = traceback.format_exc()
+            hint = ""
+            text = str(e)
+            if "SpreadsheetNotFound" in full or "not found" in text.lower():
+                hint = "\n\n可能原因：SHEET_ID 錯誤，或 Google Sheet 尚未分享給 Service Account。"
+            elif "This operation is not supported for this document" in text:
+                hint = "\n\n可能原因：這份文件仍是 Office Excel 檔，請另存為 Google 試算表。"
+            elif "403" in text or "Permission" in text:
+                hint = "\n\n可能原因：Google Sheet 沒有分享編輯權限給 Service Account。"
+            elif "PEM" in text or "private_key" in text:
+                hint = "\n\n可能原因：private_key 格式錯誤，請檢查 Streamlit Secrets。"
+            return SheetDB._set_error(f"{error_type}: {e}{hint}\n\n--- traceback ---\n{full}")
 
     @staticmethod
     def clear_cache():
@@ -203,10 +237,8 @@ class SheetDB:
                     ])
                 return ws
             except Exception as e:
-                st.session_state["sheet_db_error"] = f"建立工作表 {name} 失敗：{e}"
-                return None
+                return SheetDB._set_error(f"建立工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
 
-        # 表頭空白時補上欄位；表頭缺欄時向右補齊，不刪既有資料。
         try:
             header = [str(h).strip() for h in ws.row_values(1)]
             non_empty_header = [h for h in header if h]
@@ -217,12 +249,11 @@ class SheetDB:
                 if missing:
                     SheetDB.update_values(ws, "A1", [non_empty_header + missing])
         except Exception as e:
-            st.session_state["sheet_db_error"] = f"檢查工作表 {name} 表頭失敗：{e}"
+            SheetDB._set_error(f"檢查工作表 {name} 表頭失敗：{type(e).__name__}: {e}")
         return ws
 
     @staticmethod
     def update_values(ws, range_name: str, values: list[list[Any]]):
-        """gspread v5/v6 相容更新，避免 Worksheet.update 參數順序錯誤。"""
         try:
             return ws.update(values=values, range_name=range_name)
         except TypeError:
@@ -251,6 +282,7 @@ class SheetDB:
 
     @staticmethod
     def to_sheet_value(value: Any) -> str:
+        from datetime import date, datetime
         if isinstance(value, (list, dict)):
             return json.dumps(value, ensure_ascii=False)
         if isinstance(value, datetime):
@@ -277,7 +309,7 @@ class SheetDB:
                 records = default_rows
             return SheetDB.normalize_records(records, columns)
         except Exception as e:
-            st.session_state["sheet_db_error"] = f"讀取工作表 {name} 失敗：{e}"
+            SheetDB._set_error(f"讀取工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
             return None
 
     @staticmethod
@@ -296,7 +328,7 @@ class SheetDB:
             SheetDB.update_values(ws, "A1", values)
             return True
         except Exception as e:
-            st.session_state["sheet_db_error"] = f"寫入工作表 {name} 失敗：{e}"
+            SheetDB._set_error(f"寫入工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
             return False
 
     @staticmethod
@@ -309,22 +341,35 @@ class SheetDB:
             ws.append_row([SheetDB.to_sheet_value(row.get(col, "")) for col in columns])
             return True
         except Exception as e:
-            st.session_state["sheet_db_error"] = f"追加工作表 {name} 失敗：{e}"
+            SheetDB._set_error(f"追加工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
             return False
-
 
 
 class SheetDiagnostics:
     @staticmethod
-    def status() -> dict:
+    def status(force_retest: bool = False) -> dict:
+        if force_retest:
+            SheetDB.clear_cache()
+
         sheet_id = SheetDB.get_sheet_id()
         info = SheetDB.get_service_account_info()
-        ss = SheetDB.spreadsheet()
+        client_email = (info or {}).get("client_email", "")
+        service_ok, service_error = SheetDB._validate_service_account(info)
+
+        ss = None
+        if sheet_id and service_ok:
+            ss = SheetDB.spreadsheet()
+        elif not sheet_id:
+            SheetDB._set_error("找不到 SHEET_ID。")
+        elif not service_ok:
+            SheetDB._set_error(service_error)
+
         return {
             "sheet_id_present": bool(sheet_id),
             "sheet_id": str(sheet_id or ""),
             "service_account_present": bool(info),
-            "client_email": (info or {}).get("client_email", ""),
+            "service_account_valid": bool(service_ok),
+            "client_email": client_email,
             "connected": ss is not None,
             "spreadsheet_title": st.session_state.get("sheet_db_title", ""),
             "error": st.session_state.get("sheet_db_error", ""),
