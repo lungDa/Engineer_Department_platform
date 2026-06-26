@@ -37,16 +37,17 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info("目前版本 V3.0 Enterprise（模組化架構；新增/發布資料時驗證工號與密碼。）")
-        sheet = SheetDB.spreadsheet()
-        if sheet:
-            st.sidebar.success(f"Google Sheet 已連線：{st.session_state.get('sheet_db_title', '')}")
+        st.sidebar.info("目前版本 V3.1 Enterprise（模組化架構；Google Sheet 診斷強化；新增/發布資料時驗證工號與密碼。）")
+        status = SheetDiagnostics.status()
+        if status.get("connected"):
+            st.sidebar.success(f"Google Sheet 已連線：{status.get('spreadsheet_title', '')}")
         else:
             st.sidebar.warning("未偵測到 Google Sheet，資料會暫存在本次執行階段。")
-            if st.session_state.get("sheet_db_error"):
-                st.sidebar.caption(f"連線訊息：{st.session_state.sheet_db_error}")
+            if status.get("error"):
+                err = str(status.get("error"))
+                st.sidebar.caption("連線訊息：" + err[:500])
             else:
-                st.sidebar.caption("連線訊息：未讀到 SHEET_ID 或 gcp_service_account，請檢查 Secrets 結構。")
+                st.sidebar.caption("連線訊息：未知錯誤，請展開首頁 Google Sheet 連線診斷。")
         if st.sidebar.button("重新測試 Google Sheet 連線", width="stretch"):
             SheetDB.clear_cache()
             st.rerun()
@@ -95,12 +96,12 @@ class ViewComponents:
             else:
                 st.success("✅ 無未讀公告")
 
-        if not SheetDB.spreadsheet():
+        sheet_status = SheetDiagnostics.status()
+        if not sheet_status.get("connected"):
             st.info("目前未偵測到 Google Sheet 設定，公告會暫存在本次執行階段。請檢查 Streamlit Secrets 與 Sheet 共用權限。")
-            if st.session_state.get("sheet_db_error"):
-                st.caption(f"Google Sheet 連線訊息：{st.session_state.sheet_db_error}")
-            else:
-                st.caption("Google Sheet 連線訊息：尚未取得 SHEET_ID 或 gcp_service_account。")
+            if sheet_status.get("error"):
+                with st.expander("Google Sheet 連線訊息", expanded=False):
+                    st.code(str(sheet_status.get("error")), language="text")
 
         with st.expander("📣 發布公告（需輸入發布人工號與密碼）", expanded=False):
             with st.form("enterprise_announcement_form", clear_on_submit=True):
