@@ -762,7 +762,7 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info("目前版本已取消全站登入。")
+        st.sidebar.info("目前版本v1.02。")
         if st.session_state.partners:
             current = st.session_state.get("current_user") or st.session_state.partners[0]
             index = st.session_state.partners.index(current) if current in st.session_state.partners else 0
