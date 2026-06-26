@@ -9,15 +9,12 @@ import streamlit as st
 class AppInitializer:
     @staticmethod
     def setup():
+        # 基本資料只初始化一次，避免重複覆蓋登入狀態與使用者資料。
         if "tasks" not in st.session_state:
             st.session_state.tasks = [
                 {"id": 1, "title": "資料庫設計", "category": "進行中", "due": date.today() + timedelta(days=2), "assignees": ["王大明"], "status": "Active", "progress": 80, "hours_spent": 4.5, "importance": "高", "urgency": "高", "history": []},
                 {"id": 2, "title": "API 開發", "category": "待辦事項", "due": date.today() + timedelta(days=5), "assignees": ["陳小華"], "status": "Active", "progress": 0, "hours_spent": 0.0, "importance": "高", "urgency": "低", "history": []},
             ]
-            st.session_state.partners = ["王大明", "陳小華", "林志玲", "闕老師"]
-            st.session_state.current_user = "闕老師"
-            # role 2 = 管理員，可發布/編輯/刪除公告
-            st.session_state.roles = {"闕老師": 2, "王大明": 1, "陳小華": 0, "林志玲": 0}
             st.session_state.categories = ["待辦事項", "進行中", "已完成"]
             st.session_state.meetings = []
             st.session_state.approvals = []
@@ -26,6 +23,215 @@ class AppInitializer:
             st.session_state.cal_month = date.today().month
             st.session_state.selected_date = date.today()
             st.session_state.announcements_fallback = []
+
+        # 登入與人員資料狀態
+        st.session_state.setdefault("auth_user", None)
+        st.session_state.setdefault("current_user", "")
+        st.session_state.setdefault("user_records_fallback", UserService.default_users())
+
+        users = UserService.get_active_users()
+        st.session_state.partners = [u.get("name", "") for u in users if u.get("name", "")]
+        st.session_state.roles = {u.get("name", ""): int(float(u.get("role_level", 0) or 0)) for u in users}
+
+        if st.session_state.auth_user:
+            st.session_state.current_user = st.session_state.auth_user
+        elif not st.session_state.current_user and st.session_state.partners:
+            st.session_state.current_user = st.session_state.partners[0]
+
+
+class UserService:
+    """人員帳號服務：使用 Google Sheet 的 Users 工作表保存人員與明碼密碼。"""
+
+    WORKSHEET_NAME = "Users"
+    DEFAULT_PASSWORD = "0000"
+    COLUMNS = [
+        "id", "name", "account", "password", "role", "role_level", "active",
+        "must_change_password", "created_at", "updated_at", "last_login_at",
+    ]
+
+    @staticmethod
+    def default_users():
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        return [
+            {"id": 1, "name": "闕老師", "account": "admin", "password": UserService.DEFAULT_PASSWORD, "role": "管理員", "role_level": 2, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 2, "name": "王大明", "account": "wang", "password": UserService.DEFAULT_PASSWORD, "role": "主管", "role_level": 1, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 3, "name": "陳小華", "account": "chen", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 4, "name": "林志玲", "account": "lin", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+        ]
+
+    @staticmethod
+    def _get_sheet_id():
+        try:
+            return st.secrets.get("google_sheet", {}).get("spreadsheet_id") or st.secrets.get("SHEET_ID")
+        except Exception:
+            return os.getenv("SHEET_ID")
+
+    @staticmethod
+    @st.cache_resource(show_spinner=False)
+    def _get_spreadsheet():
+        try:
+            import gspread
+            from google.oauth2.service_account import Credentials
+
+            sheet_id = UserService._get_sheet_id()
+            if not sheet_id:
+                return None
+
+            scopes = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive",
+            ]
+            service_account_info = st.secrets.get("gcp_service_account", None)
+            if not service_account_info:
+                return None
+
+            credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
+            client = gspread.authorize(credentials)
+            return client.open_by_key(sheet_id)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _get_worksheet():
+        spreadsheet = UserService._get_spreadsheet()
+        if not spreadsheet:
+            return None
+        try:
+            return spreadsheet.worksheet(UserService.WORKSHEET_NAME)
+        except Exception:
+            worksheet = spreadsheet.add_worksheet(title=UserService.WORKSHEET_NAME, rows=200, cols=len(UserService.COLUMNS))
+            worksheet.append_row(UserService.COLUMNS)
+            worksheet.append_rows([[str(row.get(col, "")) for col in UserService.COLUMNS] for row in UserService.default_users()])
+            return worksheet
+
+    @staticmethod
+    def using_google_sheet():
+        return UserService._get_worksheet() is not None
+
+    @staticmethod
+    def _normalize_dataframe(df):
+        for col in UserService.COLUMNS:
+            if col not in df.columns:
+                df[col] = ""
+        return df[UserService.COLUMNS].fillna("")
+
+    @staticmethod
+    def load_all():
+        worksheet = UserService._get_worksheet()
+        if worksheet:
+            records = worksheet.get_all_records()
+            df = pd.DataFrame(records)
+            if df.empty:
+                df = pd.DataFrame(UserService.default_users())
+                UserService.save_all(df.to_dict("records"))
+            return UserService._normalize_dataframe(df).to_dict("records")
+        return st.session_state.get("user_records_fallback", UserService.default_users())
+
+    @staticmethod
+    def save_all(records):
+        records = UserService._normalize_dataframe(pd.DataFrame(records)).to_dict("records")
+        worksheet = UserService._get_worksheet()
+        if worksheet:
+            worksheet.clear()
+            worksheet.append_row(UserService.COLUMNS)
+            if records:
+                worksheet.append_rows([[str(row.get(col, "")) for col in UserService.COLUMNS] for row in records])
+        else:
+            st.session_state.user_records_fallback = records
+
+    @staticmethod
+    def get_active_users():
+        return [u for u in UserService.load_all() if str(u.get("active", "TRUE")).upper() == "TRUE"]
+
+    @staticmethod
+    def get_by_account(account):
+        target = str(account).strip().lower()
+        for user in UserService.load_all():
+            if str(user.get("account", "")).strip().lower() == target:
+                return user
+        return None
+
+    @staticmethod
+    def get_by_name(name):
+        for user in UserService.load_all():
+            if str(user.get("name", "")) == str(name):
+                return user
+        return None
+
+    @staticmethod
+    def authenticate(account, password):
+        user = UserService.get_by_account(account)
+        if not user or str(user.get("active", "TRUE")).upper() != "TRUE":
+            return False, "帳號不存在或已停用。", None
+        if str(user.get("password", "")) != str(password):
+            return False, "密碼錯誤。", None
+
+        records = UserService.load_all()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        for row in records:
+            if str(row.get("account", "")).strip().lower() == str(account).strip().lower():
+                row["last_login_at"] = now
+                row["updated_at"] = now
+        UserService.save_all(records)
+        return True, "登入成功。", user
+
+    @staticmethod
+    def change_password(account, old_password, new_password, confirm_password, require_old=True):
+        if len(str(new_password)) < 4:
+            return False, "新密碼至少 4 碼。"
+        if str(new_password) != str(confirm_password):
+            return False, "兩次輸入的新密碼不一致。"
+
+        records = UserService.load_all()
+        target = str(account).strip().lower()
+        for row in records:
+            if str(row.get("account", "")).strip().lower() == target:
+                if require_old and str(row.get("password", "")) != str(old_password):
+                    return False, "原密碼錯誤。"
+                row["password"] = str(new_password)
+                row["must_change_password"] = "FALSE"
+                row["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                UserService.save_all(records)
+                return True, "密碼已更新。"
+        return False, "找不到帳號。"
+
+    @staticmethod
+    def upsert_user(name, account, role, role_level, active=True, reset_password=False, direct_password=""):
+        records = UserService.load_all()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        target = str(account).strip().lower()
+        next_id = max([int(float(r.get("id", 0) or 0)) for r in records], default=0) + 1
+        for row in records:
+            if str(row.get("account", "")).strip().lower() == target:
+                row["name"] = name.strip()
+                row["role"] = role
+                row["role_level"] = int(role_level)
+                row["active"] = "TRUE" if active else "FALSE"
+                if direct_password:
+                    row["password"] = str(direct_password)
+                    row["must_change_password"] = "TRUE"
+                elif reset_password:
+                    row["password"] = UserService.DEFAULT_PASSWORD
+                    row["must_change_password"] = "TRUE"
+                row["updated_at"] = now
+                UserService.save_all(records)
+                return "updated"
+
+        records.append({
+            "id": next_id,
+            "name": name.strip(),
+            "account": target,
+            "password": str(direct_password) if direct_password else UserService.DEFAULT_PASSWORD,
+            "role": role,
+            "role_level": int(role_level),
+            "active": "TRUE" if active else "FALSE",
+            "must_change_password": "TRUE",
+            "created_at": now,
+            "updated_at": now,
+            "last_login_at": "",
+        })
+        UserService.save_all(records)
+        return "created"
 
 
 class AnnouncementService:
@@ -222,6 +428,97 @@ class ViewComponents:
             with c2:
                 f_t = st.multiselect("篩選標籤", st.session_state.tags_list)
             return f_a, f_t
+
+
+    @staticmethod
+    def render_login_gate():
+        """登入入口。未登入時停止後續頁面渲染。"""
+        if st.session_state.get("auth_user"):
+            return True
+
+        st.title("🔐 開發工程部平台登入")
+        st.caption("請使用人員帳號與密碼登入。預設密碼為 0000，首次登入後請立即修改。")
+
+        with st.container(border=True):
+            with st.form("login_form"):
+                account = st.text_input("帳號")
+                password = st.text_input("密碼", type="password")
+                submitted = st.form_submit_button("登入", use_container_width=True)
+
+                if submitted:
+                    ok, msg, user = UserService.authenticate(account, password)
+                    if ok:
+                        st.session_state.auth_user = user.get("name")
+                        st.session_state.current_user = user.get("name")
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+        if not UserService.using_google_sheet():
+            st.info("目前未偵測到 Google Sheet，人員資料會暫存在本次執行階段。部署時請設定 Streamlit Secrets 與 Users 工作表。")
+
+        st.stop()
+
+    @staticmethod
+    def render_user_sidebar():
+        user = st.session_state.get("auth_user", "")
+        user_record = UserService.get_by_name(user) or {}
+
+        st.sidebar.title("導覽控制")
+        st.sidebar.success(f"已登入：{user}")
+        st.sidebar.caption(f"角色：{user_record.get('role', '未設定')}")
+
+        if st.sidebar.button("登出", use_container_width=True):
+            st.session_state.auth_user = None
+            st.session_state.current_user = ""
+            st.rerun()
+
+        if str(user_record.get("must_change_password", "FALSE")).upper() == "TRUE":
+            st.sidebar.warning("你的帳號仍使用預設密碼，請先修改密碼。")
+
+        with st.sidebar.expander("🔑 修改我的密碼", expanded=str(user_record.get("must_change_password", "FALSE")).upper() == "TRUE"):
+            with st.form("change_my_password_form"):
+                old_password = st.text_input("原密碼", type="password")
+                new_password = st.text_input("新密碼", type="password")
+                confirm_password = st.text_input("確認新密碼", type="password")
+                submitted = st.form_submit_button("更新密碼", use_container_width=True)
+                if submitted:
+                    ok, msg = UserService.change_password(
+                        user_record.get("account", ""), old_password, new_password, confirm_password, require_old=True
+                    )
+                    if ok:
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+        if AnnouncementService.is_admin(user):
+            with st.sidebar.expander("👥 人員管理", expanded=False):
+                users = UserService.load_all()
+                st.caption("新增或更新人員。新帳號預設密碼為 0000。")
+                with st.form("admin_user_form"):
+                    name = st.text_input("姓名")
+                    account = st.text_input("帳號（英文/數字，登入用）")
+                    role_map = {"一般人員": 0, "主管": 1, "管理員": 2}
+                    role = st.selectbox("角色", list(role_map.keys()))
+                    active = st.checkbox("啟用帳號", value=True)
+                    direct_password = st.text_input("直接設定密碼（留空則新帳號預設 0000）", type="password")
+                    reset_password = st.checkbox("重設密碼為 0000", value=False)
+                    submitted = st.form_submit_button("新增 / 更新人員", use_container_width=True)
+                    if submitted:
+                        if not name.strip() or not account.strip():
+                            st.warning("請輸入姓名與帳號。")
+                        else:
+                            result = UserService.upsert_user(name, account, role, role_map[role], active, reset_password, direct_password)
+                            st.success("人員已新增。" if result == "created" else "人員資料已更新。")
+                            st.rerun()
+
+                st.divider()
+                for u in users:
+                    active_text = "啟用" if str(u.get("active", "TRUE")).upper() == "TRUE" else "停用"
+                    default_text = "｜需改密碼" if str(u.get("must_change_password", "FALSE")).upper() == "TRUE" else ""
+                    st.caption(f"{u.get('name')} / {u.get('account')} / {u.get('role')} / {active_text}{default_text}")
 
     @staticmethod
     def get_active_announcement_count():
