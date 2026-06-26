@@ -144,6 +144,44 @@ class UserService:
         return sorted(names)
 
     @staticmethod
+    def is_developer_user(user: dict[str, Any] | None) -> bool:
+        """開發者判定規則。
+
+        請在 Google Sheet 的 Users 工作表建立一筆開發者人員：
+        - role 填「開發者」或 developer
+        - 或 account 填 developer / dev
+        - 或 role_level 設為 9 以上
+        - active 必須為 TRUE
+        """
+        if not user:
+            return False
+        if bool_text(user.get("active", "TRUE")) != "TRUE":
+            return False
+        account = str(user.get("account", "")).strip().lower()
+        role = str(user.get("role", "")).strip().lower()
+        role_level = parse_int(user.get("role_level", 0), 0)
+        return (
+            account in {"developer", "dev"}
+            or "開發" in role
+            or "developer" in role
+            or "dev" == role
+            or role_level >= 9
+        )
+
+    @staticmethod
+    def verify_developer_password(password: str) -> tuple[bool, str]:
+        """只用密碼開啟首頁 Google Sheet 診斷，不做全站登入。"""
+        if not str(password or "").strip():
+            return False, "請輸入開發者密碼。"
+        developers = [u for u in UserService.get_active_users() if UserService.is_developer_user(u)]
+        if not developers:
+            return False, "Users 工作表尚未建立開發者帳號。請將開發者的 role 設為「開發者」或 role_level 設為 9 以上。"
+        for user in developers:
+            if str(user.get("password", "")) == str(password):
+                return True, "開發者驗證成功。"
+        return False, "開發者密碼錯誤。"
+
+    @staticmethod
     def get_by_account(account):
         target = str(account).strip().lower()
         for user in UserService.load_all():
