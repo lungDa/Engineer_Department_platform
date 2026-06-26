@@ -1,1 +1,14 @@
+streamlit>=1.45
 
+pandas
+numpy
+
+plotly
+
+gspread
+google-auth
+streamlit-gsheets
+
+openpyxl
+
+python-dateutil
