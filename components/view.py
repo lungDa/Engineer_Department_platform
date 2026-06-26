@@ -41,20 +41,25 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info("目前版本 V3.3 Enterprise Performance Edition（Google Sheet 快取與寫入最佳化；新增/發布資料時驗證工號與密碼。）")
-        status = SheetDiagnostics.status()
-        if status.get("connected"):
-            st.sidebar.success(f"Google Sheet 已連線：{status.get('spreadsheet_title', '')}")
-        else:
-            st.sidebar.warning("未偵測到 Google Sheet，資料會暫存在本次執行階段。")
-            if status.get("error"):
-                err = str(status.get("error"))
-                st.sidebar.caption("連線訊息：" + err[:500])
-            else:
-                st.sidebar.caption("連線訊息：未知錯誤，請由開發者開啟首頁診斷工具。")
-        if st.sidebar.button("重新測試 Google Sheet 連線", width="stretch"):
-            SheetDB.clear_cache()
-            st.rerun()
+        st.sidebar.info("目前版本 V3.3.2 Enterprise Performance Edition（Google Sheet 診斷已隱藏；開發者驗證後才顯示。）")
+
+        # Google Sheet 連線診斷預設完全隱藏。
+        # 只有首頁「🛠️ 開發者」驗證成功後，左側才顯示簡要狀態與重新測試按鈕。
+        if st.session_state.get("developer_diagnostics_unlocked", False):
+            with st.sidebar.expander("🩺 Google Sheet 連線診斷", expanded=False):
+                status = SheetDiagnostics.status()
+                if status.get("connected"):
+                    st.success(f"Google Sheet 已連線：{status.get('spreadsheet_title', '')}")
+                else:
+                    st.warning("Google Sheet 連線失敗。")
+                    if status.get("error"):
+                        err = str(status.get("error"))
+                        st.caption("連線訊息：" + err[:500])
+                    else:
+                        st.caption("連線訊息：未知錯誤，請查看首頁開發者診斷面板。")
+                if st.button("重新測試 Google Sheet 連線", width="stretch", key="sidebar_retest_google_sheet"):
+                    SheetDB.clear_cache()
+                    st.rerun()
 
         with st.sidebar.expander("👥 人員資料提醒", expanded=False):
             st.caption("任務、會議、簽核與公告發布都會檢查 Users 工作表中的工號與密碼。")
