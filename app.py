@@ -1,27 +1,31 @@
 import streamlit as st
-from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService
+from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDiagnostics
 
-# 1. 統籌全局設定
-st.set_page_config(page_title=" 鋒霈  工程部  專業系統", layout="wide")
+st.set_page_config(page_title="鋒霈 工程部 專業系統", layout="wide")
 
-# 2. 確保環境初始化
 AppInitializer.setup()
-
-# 3. 側邊欄：取消全站登入；新增/發布資料時才驗證工號與密碼
 ViewComponents.render_public_sidebar()
 
-# 4. 呈現首頁/大門頁面
-st.title("🚀 歡迎使用 鋒霈  工程部  專業任務管理系統")
+st.title("🚀 歡迎使用 鋒霈 工程部 專業任務管理系統")
 st.write("---")
 st.write("這是一個整合了專案管理、會議系統、簽核流程與效率分析的企業級儀表板。")
 st.write("請使用側邊欄選擇功能模組。")
 
-# 5. 首頁企業布告欄
+with st.expander("🩺 Google Sheet 連線診斷", expanded=False):
+    status = SheetDiagnostics.status()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("SHEET_ID", "OK" if status["sheet_id_present"] else "未讀到")
+    c2.metric("Service Account", "OK" if status["service_account_present"] else "未讀到")
+    c3.metric("連線", "OK" if status["connected"] else "失敗")
+    st.caption(f"Sheet ID：{status['sheet_id'] or '-'}")
+    st.caption(f"Service Account：{status['client_email'] or '-'}")
+    st.caption(f"Spreadsheet：{status['spreadsheet_title'] or '-'}")
+    if status["error"]:
+        st.error(status["error"])
+
 ViewComponents.render_announcement_board()
 
 st.write("---")
-
-# 6. 顯示當前系統概況
 st.subheader("系統狀態概覽")
 metric1, metric2 = st.columns(2)
 with metric1:
@@ -29,7 +33,6 @@ with metric1:
 with metric2:
     st.metric("有效公告數", ViewComponents.get_active_announcement_count())
 
-# 7. 快速建立任務
 st.sidebar.divider()
 if st.sidebar.button("📝 快速建立任務", width="stretch"):
     st.session_state.show_add_task = True
@@ -82,5 +85,5 @@ if st.session_state.get("show_add_task", False):
                         engine.add_log(new_t, "透過側邊欄建立任務", author=author)
                         TaskService.add_task(new_t, author=author, account=account)
                         st.session_state.show_add_task = False
-                        st.success(f"任務已建立並寫入 Google Sheet。發布人：{author}")
+                        st.success(f"任務已建立並寫入資料庫。發布人：{author}")
                         st.rerun()
