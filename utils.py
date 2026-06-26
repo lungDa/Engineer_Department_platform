@@ -208,7 +208,6 @@ def parse_json_list(value: Any) -> list:
 class AppInitializer:
     @staticmethod
     def setup():
-        st.session_state.setdefault("current_user", "")
         st.session_state.setdefault("user_records_fallback", UserService.default_users())
         st.session_state.setdefault("announcements_fallback", [])
         st.session_state.setdefault("tasks_fallback", TaskService.default_tasks())
@@ -231,8 +230,6 @@ class AppInitializer:
         st.session_state.setdefault("cal_month", date.today().month)
         st.session_state.setdefault("selected_date", date.today())
 
-        if not st.session_state.current_user and st.session_state.partners:
-            st.session_state.current_user = st.session_state.partners[0]
 
 
 class UserService:
@@ -247,7 +244,7 @@ class UserService:
     def default_users():
         now = now_text()
         return [
-            {"id": 1, "name": "管理者", "account": "admin", "password": UserService.DEFAULT_PASSWORD, "role": "管理員", "role_level": 2, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 1, "name": "闕老師", "account": "admin", "password": UserService.DEFAULT_PASSWORD, "role": "管理員", "role_level": 2, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
             {"id": 2, "name": "王大明", "account": "wang", "password": UserService.DEFAULT_PASSWORD, "role": "主管", "role_level": 1, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
             {"id": 3, "name": "陳小華", "account": "chen", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
             {"id": 4, "name": "林志玲", "account": "lin", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
@@ -432,15 +429,15 @@ class TaskService:
     WORKSHEET_NAME = "Tasks"
     COLUMNS = [
         "id", "title", "category", "due", "assignees", "status", "progress", "hours_spent",
-        "importance", "urgency", "tags", "notes", "depends_on", "history", "created_by", "created_at", "updated_at",
+        "importance", "urgency", "tags", "notes", "depends_on", "history", "created_by", "created_account", "created_at", "updated_at",
     ]
 
     @staticmethod
     def default_tasks():
         now = now_text()
         return [
-            {"id": 1, "title": "資料庫設計", "category": "進行中", "due": date.today() + timedelta(days=2), "assignees": ["王大明"], "status": "Active", "progress": 80, "hours_spent": 4.5, "importance": "高", "urgency": "高", "tags": "設計", "notes": "範例：所有任務會寫入本工作表", "depends_on": [], "history": [], "created_by": "系統", "created_at": now, "updated_at": now},
-            {"id": 2, "title": "API 開發", "category": "待辦事項", "due": date.today() + timedelta(days=5), "assignees": ["陳小華"], "status": "Active", "progress": 0, "hours_spent": 0.0, "importance": "高", "urgency": "低", "tags": "開發", "notes": "", "depends_on": [], "history": [], "created_by": "系統", "created_at": now, "updated_at": now},
+            {"id": 1, "title": "資料庫設計", "category": "進行中", "due": date.today() + timedelta(days=2), "assignees": ["王大明"], "status": "Active", "progress": 80, "hours_spent": 4.5, "importance": "高", "urgency": "高", "tags": "設計", "notes": "範例：所有任務會寫入本工作表", "depends_on": [], "history": [], "created_by": "系統", "created_account": "system", "created_at": now, "updated_at": now},
+            {"id": 2, "title": "API 開發", "category": "待辦事項", "due": date.today() + timedelta(days=5), "assignees": ["陳小華"], "status": "Active", "progress": 0, "hours_spent": 0.0, "importance": "高", "urgency": "低", "tags": "開發", "notes": "", "depends_on": [], "history": [], "created_by": "系統", "created_account": "system", "created_at": now, "updated_at": now},
         ]
 
     @staticmethod
@@ -482,11 +479,17 @@ class TaskService:
             st.session_state.tasks_fallback = records
 
     @staticmethod
-    def add_task(task):
+    def add_task(task, author=None, account=None):
         records = TaskService.load_all()
         next_id = max([parse_int(t.get("id"), 0) for t in records], default=0) + 1
         now = now_text()
-        task.update({"id": next_id, "created_by": st.session_state.current_user, "created_at": now, "updated_at": now})
+        task.update({
+            "id": next_id,
+            "created_by": author or task.get("created_by", ""),
+            "created_account": account or task.get("created_account", ""),
+            "created_at": now,
+            "updated_at": now,
+        })
         records.append(task)
         TaskService.save_all(records)
         st.session_state.tasks = records
@@ -524,12 +527,12 @@ class TaskService:
 
 class MeetingService:
     WORKSHEET_NAME = "Meetings"
-    COLUMNS = ["id", "title", "time", "attendees", "link", "notes", "owner", "created_at", "updated_at"]
+    COLUMNS = ["id", "title", "time", "attendees", "link", "notes", "owner", "owner_account", "created_at", "updated_at"]
 
     @staticmethod
     def default_meetings():
         now = now_text()
-        return [{"id": 1, "title": "週會範例", "time": date.today(), "attendees": ["闕老師"], "link": "", "notes": "這是一筆可刪除的範例會議", "owner": "闕老師", "created_at": now, "updated_at": now}]
+        return [{"id": 1, "title": "週會範例", "time": date.today(), "attendees": ["闕老師"], "link": "", "notes": "這是一筆可刪除的範例會議", "owner": "闕老師", "owner_account": "admin", "created_at": now, "updated_at": now}]
 
     @staticmethod
     def _from_sheet(row):
@@ -560,21 +563,25 @@ class MeetingService:
             st.session_state.meetings_fallback = records
 
     @staticmethod
-    def add_meeting(meeting):
+    def add_meeting(meeting, author=None, account=None):
         records = MeetingService.load_all()
         next_id = max([parse_int(m.get("id", 0), 0) for m in records], default=0) + 1
         now = now_text()
-        meeting.update({"id": next_id, "created_at": now, "updated_at": now})
+        meeting.update({
+            "id": next_id,
+            "owner": author or meeting.get("owner", ""),
+            "owner_account": account or meeting.get("owner_account", ""),
+            "created_at": now,
+            "updated_at": now,
+        })
         records.append(meeting)
         MeetingService.save_all(records)
         st.session_state.meetings = records
 
     @staticmethod
     def get_visible_meetings(target_date=None):
-        user = st.session_state.current_user
-        role_level = st.session_state.roles.get(user, 0)
-        meetings = st.session_state.meetings
-        visible = [m for m in meetings if (user in m.get("attendees", []) or role_level > st.session_state.roles.get(m.get("owner", ""), 0) or user == m.get("owner"))]
+        # 取消全站登入後，會議清單預設全部可見。
+        visible = list(st.session_state.meetings)
         if target_date:
             visible = [m for m in visible if m.get("time") == target_date]
         return visible
@@ -582,12 +589,12 @@ class MeetingService:
 
 class ApprovalService:
     WORKSHEET_NAME = "Approvals"
-    COLUMNS = ["id", "type", "content", "sender", "current_signer", "status", "history", "created_at", "updated_at"]
+    COLUMNS = ["id", "type", "content", "sender", "sender_account", "current_signer", "status", "history", "created_at", "updated_at"]
 
     @staticmethod
     def default_approvals():
         now = now_text()
-        return [{"id": 1, "type": "請假單", "content": "範例簽呈，可刪除", "sender": "闕老師", "current_signer": "闕老師", "status": "簽核中", "history": ["[系統] 範例資料"], "created_at": now, "updated_at": now}]
+        return [{"id": 1, "type": "請假單", "content": "範例簽呈，可刪除", "sender": "闕老師", "sender_account": "admin", "current_signer": "闕老師", "status": "簽核中", "history": ["[系統] 範例資料"], "created_at": now, "updated_at": now}]
 
     @staticmethod
     def _from_sheet(row):
@@ -616,27 +623,33 @@ class ApprovalService:
             st.session_state.approvals_fallback = records
 
     @staticmethod
-    def add_approval(approval):
+    def add_approval(approval, author=None, account=None):
         records = ApprovalService.load_all()
         next_id = max([parse_int(a.get("id", 0), 0) for a in records], default=0) + 1
         now = now_text()
-        approval.update({"id": next_id, "created_at": now, "updated_at": now})
+        approval.update({
+            "id": next_id,
+            "sender": author or approval.get("sender", ""),
+            "sender_account": account or approval.get("sender_account", ""),
+            "created_at": now,
+            "updated_at": now,
+        })
         records.append(approval)
         ApprovalService.save_all(records)
         st.session_state.approvals = records
 
     @staticmethod
-    def process_action(approval, action, reason, transfer_to=None):
+    def process_action(approval, action, reason, signer_name, transfer_to=None):
         now_str = datetime.now().strftime("%m-%d %H:%M")
         if action == "同意":
             approval["status"] = "已同意"
-            approval["history"].append(f"[{now_str}] {st.session_state.current_user} 同意。意見: {reason}")
+            approval["history"].append(f"[{now_str}] {signer_name} 同意。意見: {reason}")
         elif action == "駁回":
             approval["status"] = "已駁回"
-            approval["history"].append(f"[{now_str}] {st.session_state.current_user} 駁回。意見: {reason}")
+            approval["history"].append(f"[{now_str}] {signer_name} 駁回。意見: {reason}")
         elif action == "轉交":
             approval["current_signer"] = transfer_to
-            approval["history"].append(f"[{now_str}] {st.session_state.current_user} 轉交給 {transfer_to}。意見: {reason}")
+            approval["history"].append(f"[{now_str}] {signer_name} 轉交給 {transfer_to}。意見: {reason}")
         approval["updated_at"] = now_text()
         ApprovalService.save_all(st.session_state.approvals)
 
@@ -644,14 +657,13 @@ class ApprovalService:
 class AnnouncementService:
     WORKSHEET_NAME = "Announcements"
     COLUMNS = [
-        "id", "title", "content", "level", "author", "created_at", "expires_at",
+        "id", "title", "content", "level", "author", "author_account", "created_at", "expires_at",
         "pinned", "active", "attachment_name", "attachment_type", "attachment_base64", "seen_by",
     ]
 
     @staticmethod
     def is_admin(user=None):
-        user = user or st.session_state.get("current_user", "")
-        return st.session_state.roles.get(user, 0) >= 2
+        return st.session_state.roles.get(user or "", 0) >= 2
 
     @staticmethod
     def using_google_sheet():
@@ -682,7 +694,7 @@ class AnnouncementService:
         return sorted(active, key=lambda a: (bool_text(a.get("pinned", "FALSE"), False) != "TRUE", -parse_int(a.get("id", 0), 0)))
 
     @staticmethod
-    def create(title, content, level, expires_at, pinned, attachment, author=None):
+    def create(title, content, level, expires_at, pinned, attachment, author=None, account=None):
         records = AnnouncementService.load_all()
         next_id = max([parse_int(r.get("id", 0), 0) for r in records], default=0) + 1
         attachment_name = ""
@@ -695,7 +707,7 @@ class AnnouncementService:
             attachment_base64 = base64.b64encode(data).decode("utf-8")
         records.append({
             "id": next_id, "title": title.strip(), "content": content.strip(), "level": level,
-            "author": author or st.session_state.current_user or "未指定", "created_at": now_text(),
+            "author": author or "未指定", "author_account": account or "", "created_at": now_text(),
             "expires_at": expires_at.strftime("%Y-%m-%d") if expires_at else "",
             "pinned": bool_text(pinned), "active": "TRUE", "attachment_name": attachment_name,
             "attachment_type": attachment_type, "attachment_base64": attachment_base64, "seen_by": "",
@@ -762,22 +774,14 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info("目前版本v1.02。")
-        if st.session_state.partners:
-            current = st.session_state.get("current_user") or st.session_state.partners[0]
-            index = st.session_state.partners.index(current) if current in st.session_state.partners else 0
-            selected = st.sidebar.selectbox("目前操作人員（用於任務/會議紀錄）", st.session_state.partners, index=index)
-            st.session_state.current_user = selected
-        else:
-            st.session_state.current_user = st.session_state.get("current_user") or "訪客"
-            st.sidebar.caption("尚未建立 Users 人員名單。")
+        st.sidebar.info("目前版本已取消全站登入。新增/發布資料時才驗證工號與密碼。")
         if not UserService.using_google_sheet():
             st.sidebar.warning("未偵測到 Google Sheet，資料會暫存在本次執行階段。")
             if st.session_state.get("sheet_db_error"):
                 st.sidebar.caption(f"連線訊息：{st.session_state.sheet_db_error}")
 
         with st.sidebar.expander("👥 人員資料提醒", expanded=False):
-            st.caption("人員不需要登入；只有發布布告欄消息時，才會檢查 Users 工作表中的工號與密碼。")
+            st.caption("任務、會議、簽核與公告發布都會檢查 Users 工作表中的工號與密碼。")
             st.caption("Users 工作表建議保留欄位：name、account、password、role、role_level、active。")
 
     @staticmethod
@@ -795,7 +799,7 @@ class ViewComponents:
     def render_announcement_board():
         level_icon = {"一般": "📌", "重要": "⚠️", "緊急": "🚨", "維護": "🛠️"}
         level_label = {"一般": "一般公告", "重要": "重要公告", "緊急": "緊急公告", "維護": "維護公告"}
-        user = st.session_state.get("current_user", "訪客") or "訪客"
+        user = "訪客"
         announcements = AnnouncementService.get_active()
         unread_count = AnnouncementService.unread_count(user)
         pinned_titles = [a.get("title", "") for a in announcements if bool_text(a.get("pinned", "FALSE"), False) == "TRUE"]
@@ -855,7 +859,7 @@ class ViewComponents:
                             st.error(msg)
                         else:
                             author = publisher.get("name") or publisher.get("account") or publisher_account
-                            AnnouncementService.create(title, content, level, expires_at, pinned, attachment, author=author)
+                            AnnouncementService.create(title, content, level, expires_at, pinned, attachment, author=author, account=publisher.get("account", publisher_account))
                             st.success(f"公告已發布並寫入布告欄。發布人：{author}")
                             st.rerun()
 
@@ -920,8 +924,8 @@ class ViewComponents:
 
 class StreamFlowEngine:
     @staticmethod
-    def add_log(task, message):
+    def add_log(task, message, author="系統"):
         if "history" not in task:
             task["history"] = []
-        task["history"].append(f"[{datetime.now().strftime('%m-%d %H:%M')}] {st.session_state.current_user} {message}")
+        task["history"].append(f"[{datetime.now().strftime('%m-%d %H:%M')}] {author} {message}")
         task["updated_at"] = now_text()
