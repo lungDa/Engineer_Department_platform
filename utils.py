@@ -33,6 +33,7 @@ class SheetDB:
             return None
 
     @staticmethod
+    @st.cache_resource(show_spinner=False)
     def spreadsheet():
         try:
             import gspread
