@@ -9,6 +9,25 @@ import pandas as pd
 import streamlit as st
 
 
+@st.cache_resource(show_spinner=False, ttl=600)
+def _cached_spreadsheet(sheet_id: str, service_account_json: str):
+    """建立並快取 Google Spreadsheet 連線。
+
+    注意：這個函式只在成功時快取；錯誤會往外拋，避免把失敗的 None 快取住。
+    service_account_json 使用 JSON 字串，確保 cache key 穩定。
+    """
+    import gspread
+    from google.oauth2.service_account import Credentials
+
+    service_account_info = json.loads(service_account_json)
+    credentials = Credentials.from_service_account_info(
+        service_account_info,
+        scopes=SheetDB.SCOPES,
+    )
+    client = gspread.authorize(credentials)
+    return client.open_by_key(sheet_id)
+
+
 # =========================================================
 # Google Sheet 共用層：讓所有功能匹配範本工作表
 # =========================================================
@@ -35,20 +54,31 @@ class SheetDB:
     @staticmethod
     def spreadsheet():
         try:
-            import gspread
-            from google.oauth2.service_account import Credentials
-
             sheet_id = SheetDB.get_sheet_id()
             service_account_info = SheetDB.get_service_account_info()
-            if not sheet_id or not service_account_info:
+
+            if not sheet_id:
+                st.session_state["sheet_db_error"] = "缺少 SHEET_ID / google_sheet.spreadsheet_id。"
+                return None
+            if not service_account_info:
+                st.session_state["sheet_db_error"] = "缺少 gcp_service_account。"
                 return None
 
-            credentials = Credentials.from_service_account_info(service_account_info, scopes=SheetDB.SCOPES)
-            client = gspread.authorize(credentials)
-            return client.open_by_key(sheet_id)
+            # Streamlit Secrets 回傳的是特殊 dict-like 物件，轉成純 dict + JSON 字串後再做快取。
+            service_account_json = json.dumps(dict(service_account_info), sort_keys=True)
+            spreadsheet = _cached_spreadsheet(str(sheet_id).strip(), service_account_json)
+            st.session_state.pop("sheet_db_error", None)
+            return spreadsheet
         except Exception as e:
             st.session_state["sheet_db_error"] = str(e)
             return None
+
+    @staticmethod
+    def clear_cache():
+        try:
+            _cached_spreadsheet.clear()
+        except Exception:
+            pass
 
     @staticmethod
     def worksheet(name: str, columns: list[str], default_rows: list[dict[str, Any]] | None = None):
@@ -58,11 +88,15 @@ class SheetDB:
         try:
             ws = spreadsheet.worksheet(name)
         except Exception:
-            ws = spreadsheet.add_worksheet(title=name, rows=500, cols=max(len(columns), 10))
-            ws.append_row(columns)
-            if default_rows:
-                ws.append_rows([[SheetDB.to_sheet_value(row.get(col, "")) for col in columns] for row in default_rows])
-            return ws
+            try:
+                ws = spreadsheet.add_worksheet(title=name, rows=500, cols=max(len(columns), 10))
+                ws.append_row(columns)
+                if default_rows:
+                    ws.append_rows([[SheetDB.to_sheet_value(row.get(col, "")) for col in columns] for row in default_rows])
+                return ws
+            except Exception as e:
+                st.session_state["sheet_db_error"] = f"建立工作表 {name} 失敗：{e}"
+                return None
 
         # 若表頭空白或不是範本欄位，補齊第一列，不刪既有資料。
         try:
@@ -142,12 +176,18 @@ class SheetDB:
         ws = SheetDB.worksheet(name, columns)
         normalized = SheetDB.normalize_records(records, columns)
         if not ws:
+            st.session_state["sheet_db_error"] = st.session_state.get("sheet_db_error") or f"無法取得工作表：{name}"
             return False
         values = [columns]
         values.extend([[SheetDB.to_sheet_value(row.get(col, "")) for col in columns] for row in normalized])
-        ws.clear()
-        SheetDB.update_values(ws, "A1", values)
-        return True
+        try:
+            ws.clear()
+            SheetDB.update_values(ws, "A1", values)
+            st.session_state.pop("sheet_db_error", None)
+            return True
+        except Exception as e:
+            st.session_state["sheet_db_error"] = f"寫入工作表 {name} 失敗：{e}"
+            return False
 
 
 def now_text():
@@ -229,6 +269,7 @@ class AppInitializer:
         st.session_state.setdefault("cal_month", date.today().month)
         st.session_state.setdefault("selected_date", date.today())
         st.session_state.setdefault("current_user", "訪客")
+        st.session_state.setdefault("current_account", "")
 
 
 
@@ -774,11 +815,17 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info("目前版本v1.04(新增/發布資料時才驗證工號與密碼。)")
-        if not SheetDB.spreadsheet():
+        st.sidebar.info("目前版本v1.05(Google Sheet 快取優化版；新增/發布資料時驗證工號與密碼。)")
+        sheet = SheetDB.spreadsheet()
+        if sheet is None:
             st.sidebar.warning("未偵測到 Google Sheet，資料會暫存在本次執行階段。")
             if st.session_state.get("sheet_db_error"):
                 st.sidebar.caption(f"連線訊息：{st.session_state.sheet_db_error}")
+            if st.sidebar.button("重新測試 Google Sheet 連線"):
+                SheetDB.clear_cache()
+                st.rerun()
+        else:
+            st.sidebar.success(f"Google Sheet 已連線：{getattr(sheet, 'title', '已連線')}")
 
         with st.sidebar.expander("👥 人員資料提醒", expanded=False):
             st.caption("任務、會議、簽核與公告發布都會檢查 Users 工作表中的工號與密碼。")
@@ -799,7 +846,8 @@ class ViewComponents:
     def render_announcement_board():
         level_icon = {"一般": "📌", "重要": "⚠️", "緊急": "🚨", "維護": "🛠️"}
         level_label = {"一般": "一般公告", "重要": "重要公告", "緊急": "緊急公告", "維護": "維護公告"}
-        user = "訪客"
+        user = st.session_state.get("current_user", "訪客") or "訪客"
+        sheet = SheetDB.spreadsheet()
         announcements = AnnouncementService.get_active()
         unread_count = AnnouncementService.unread_count(user)
         pinned_titles = [a.get("title", "") for a in announcements if bool_text(a.get("pinned", "FALSE"), False) == "TRUE"]
@@ -824,7 +872,7 @@ class ViewComponents:
             else:
                 st.success("✅ 無未讀公告")
 
-        if not SheetDB.spreadsheet():
+        if sheet is None:
             st.info("目前未偵測到 Google Sheet 設定，公告會暫存在本次執行階段。部署時請設定 Streamlit Secrets。")
             if st.session_state.get("sheet_db_error"):
                 st.caption(f"Google Sheet 連線訊息：{st.session_state.sheet_db_error}")
@@ -861,8 +909,13 @@ class ViewComponents:
                             st.error(msg)
                         else:
                             author = publisher.get("name") or publisher.get("account") or publisher_account
+                            st.session_state.current_user = author
+                            st.session_state.current_account = publisher.get("account", publisher_account)
                             AnnouncementService.create(title, content, level, expires_at, pinned, attachment, author=author, account=publisher.get("account", publisher_account))
-                            st.success(f"公告已發布並寫入布告欄。發布人：{author}")
+                            if st.session_state.get("sheet_db_error"):
+                                st.warning(f"公告已暫存在本次執行階段，但尚未寫入 Google Sheet：{st.session_state.sheet_db_error}")
+                            else:
+                                st.success(f"公告已發布並寫入布告欄。發布人：{author}")
                             st.rerun()
 
         if not announcements:
@@ -887,7 +940,7 @@ class ViewComponents:
                     try:
                         raw = base64.b64decode(attachment_base64)
                         if str(attachment_type).startswith("image/"):
-                            st.image(raw, caption=attachment_name, use_container_width=False)
+                            st.image(raw, caption=attachment_name, width="content")
                         st.download_button(label=f"📎 下載附件：{attachment_name}", data=raw, file_name=attachment_name, mime=attachment_type or "application/octet-stream", key=f"download_ann_{ann_id}")
                     except Exception:
                         st.warning("附件資料讀取失敗，請由管理員重新上傳。")
