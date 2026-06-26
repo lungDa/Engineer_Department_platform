@@ -31,7 +31,7 @@ with metric2:
 
 # 7. 快速建立任務
 st.sidebar.divider()
-if st.sidebar.button("📝 快速建立任務", use_container_width=True):
+if st.sidebar.button("📝 快速建立任務", width="stretch"):
     st.session_state.show_add_task = True
 
 if st.session_state.get("show_add_task", False):
