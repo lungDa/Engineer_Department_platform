@@ -7,9 +7,8 @@ st.set_page_config(page_title=" 鋒霈  工程部  專業系統", layout="wide")
 # 2. 確保環境初始化
 AppInitializer.setup()
 
-# 3. 登入驗證：人員資料由 Google Sheet Users 工作表維護
-ViewComponents.render_login_gate()
-ViewComponents.render_user_sidebar()
+# 3. 側邊欄：取消全站登入，僅保留目前操作人員選擇
+ViewComponents.render_public_sidebar()
 
 # 4. 呈現首頁/大門頁面
 st.title("🚀 歡迎使用 鋒霈  工程部  專業任務管理系統")
@@ -30,7 +29,7 @@ with metric1:
 with metric2:
     st.metric("有效公告數", ViewComponents.get_active_announcement_count())
 with metric3:
-    st.metric("目前使用者", st.session_state.current_user)
+    st.metric("目前操作人員", st.session_state.current_user)
 
 # 7. 快速建立任務
 st.sidebar.divider()
