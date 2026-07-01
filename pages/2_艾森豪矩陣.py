@@ -206,214 +206,49 @@ st.divider()
 # 共用Task Card
 # ============================================================
 
-from datetime import datetime
-
 def render_task(task):
 
-    assignees = task.get("assignees", [])
+    assignees=task.get("assignees",[])
 
-    if isinstance(assignees, str):
-        assignees = [
-            x.strip()
-            for x in assignees.replace(";", ",").split(",")
-            if x.strip()
+    if isinstance(assignees,str):
+
+        assignees=[
+
+        x.strip()
+
+        for x in assignees.replace(";",",").split(",")
+
+        if x.strip()
+
         ]
 
-    # ------------------------
-    # 指派人員 Badge
-    # ------------------------
+    badges=""
 
-    badges = ""
+    for p in assignees:
 
-    colors = [
-        "#2563EB",
-        "#16A34A",
-        "#CA8A04",
-        "#9333EA",
-        "#DC2626",
-        "#0891B2"
-    ]
+        badges+=f'<span class="badge">{p}</span>'
 
-    for i, person in enumerate(assignees):
-
-        color = colors[i % len(colors)]
-
-        badges += f"""
-        <span style="
-        display:inline-block;
-        background:{color};
-        color:white;
-        padding:4px 10px;
-        border-radius:20px;
-        margin-right:4px;
-        margin-bottom:5px;
-        font-size:12px;
-        ">
-        👤 {person}
-        </span>
-        """
-
-    # ------------------------
-    # Priority
-    # ------------------------
-
-    imp = task.get("importance", "低")
-
-    if imp == "高":
-        priority = """
-        <span style="
-        color:white;
-        background:#DC2626;
-        padding:4px 10px;
-        border-radius:15px;
-        ">
-        🔥 HIGH
-        </span>
-        """
-    else:
-        priority = """
-        <span style="
-        color:white;
-        background:#16A34A;
-        padding:4px 10px;
-        border-radius:15px;
-        ">
-        LOW
-        </span>
-        """
-
-    # ------------------------
-    # Progress
-    # ------------------------
-
-    progress = int(task.get("progress", 0))
-
-    progress_color = "#16A34A"
-
-    if progress < 40:
-        progress_color = "#DC2626"
-
-    elif progress < 80:
-        progress_color = "#F59E0B"
-
-    # ------------------------
-    # 剩餘天數
-    # ------------------------
-
-    due = task.get("due", "")
-
-    remain = ""
-
-    try:
-
-        if isinstance(due, str):
-
-            d = datetime.strptime(due, "%Y-%m-%d").date()
-
-        else:
-
-            d = due
-
-        days = (d - datetime.today().date()).days
-
-        if days < 0:
-
-            remain = f"""
-            <span style="color:#DC2626;font-weight:bold;">
-            🔴 已逾期 {abs(days)} 天
-            </span>
-            """
-
-        elif days == 0:
-
-            remain = """
-            <span style="color:#F59E0B;font-weight:bold;">
-            ⚠ 今天到期
-            </span>
-            """
-
-        else:
-
-            remain = f"""
-            <span style="color:#16A34A;">
-            ⏳ 剩餘 {days} 天
-            </span>
-            """
-
-    except:
-
-        remain = ""
-
-    # ------------------------
-    # Card
-    # ------------------------
+    progress=task.get("progress",0)
 
     st.markdown(f"""
+<div class="task-card">
 
-<div style="
-background:white;
-border-radius:14px;
-padding:16px;
-margin-bottom:12px;
-box-shadow:0 3px 12px rgba(0,0,0,.12);
-border-left:6px solid {progress_color};
-">
+<b>📌 {task['title']}</b>
 
-<div style="
-font-size:18px;
-font-weight:bold;
-">
-
-📌 {task['title']}
-
-</div>
-
-<br>
+<br><br>
 
 {badges}
 
 <br>
 
-{priority}
-
-<br><br>
-
 📅 {task.get("due","")}
 
 <br>
 
-{remain}
-
-<br><br>
-
-<div style="
-background:#EEE;
-height:10px;
-border-radius:10px;
-">
-
-<div style="
-height:10px;
-width:{progress}%;
-background:{progress_color};
-border-radius:10px;
-">
-</div>
-
-</div>
-
-<div style="
-margin-top:5px;
-font-size:13px;
-">
-
 完成度 {progress}%
 
 </div>
-
-</div>
-
-""", unsafe_allow_html=True)
+""",unsafe_allow_html=True)
 
 # ============================================================
 # Enterprise Matrix
@@ -567,28 +402,11 @@ with right:
 # 中央十字(水平)
 # ============================
 
-st.markdown("""
-<style>
+st.markdown(
+    "<div class='cross-divider'></div>",
+    unsafe_allow_html=True
+)
 
-.cross-divider{
-
-height:5px;
-
-background:#444;
-
-border-radius:5px;
-
-margin-top:30px;
-
-margin-bottom:30px;
-
-}
-
-</style>
-
-<div class="cross-divider"></div>
-
-""", unsafe_allow_html=True)
 # ============================
 # 第二列
 # ============================
