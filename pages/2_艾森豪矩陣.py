@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 pages/2_艾森豪矩陣.py
-Enterprise Matrix Dashboard V6.0
+Enterprise Matrix Dashboard V6.1 Fixed
 
-設計目標：
-- 保留既有 StreamFlow / utils 架構
-- 企業版 UI：Dashboard Header / KPI / Eisenhower Matrix / Right Insight Panel
-- 每張任務卡一次輸出完整 HTML，避免 Streamlit 顯示原始 HTML 片段
-- 支援搜尋、篩選、排序、逾期風險、CSV 匯出
+修正重點：
+- 任務卡改用 Streamlit 原生元件 + st.progress，避免 HTML 片段外露
+- 不再用「開啟 div 後穿插 Streamlit 元件」的寫法
+- 保留企業版：搜尋、篩選、排序、KPI、風險判斷、CSV 匯出、右側洞察
 """
 
 from __future__ import annotations
 
-import html
 from datetime import date, datetime
 from typing import Any, Dict, Iterable, List, Tuple
 
@@ -26,14 +24,14 @@ from utils import AppInitializer
 # ============================================================
 
 st.set_page_config(
-    page_title="艾森豪矩陣 | Enterprise V6",
+    page_title="艾森豪矩陣 | Enterprise V6.1",
     page_icon="🔲",
     layout="wide",
 )
 
 AppInitializer.setup()
 
-APP_VERSION = "V6.0 Enterprise Matrix Dashboard"
+APP_VERSION = "V6.1 Enterprise Matrix Dashboard - Fixed UI"
 TODAY = date.today()
 Task = Dict[str, Any]
 
@@ -42,13 +40,11 @@ Task = Dict[str, Any]
 # Utilities
 # ============================================================
 
-def safe_text(value: Any, default: str = "") -> str:
+def text(value: Any, default: str = "") -> str:
     if value is None:
         return default
-    text = str(value).strip()
-    if not text:
-        return default
-    return html.escape(text)
+    s = str(value).strip()
+    return s if s else default
 
 
 def normalize_people(value: Any) -> List[str]:
@@ -56,8 +52,8 @@ def normalize_people(value: Any) -> List[str]:
         return []
     if isinstance(value, list):
         return [str(x).strip() for x in value if str(x).strip()]
-    text = str(value).replace("；", ",").replace(";", ",").replace("、", ",")
-    return [x.strip() for x in text.split(",") if x.strip()]
+    s = str(value).replace("；", ",").replace(";", ",").replace("、", ",")
+    return [x.strip() for x in s.split(",") if x.strip()]
 
 
 def parse_date(value: Any) -> date | None:
@@ -68,17 +64,17 @@ def parse_date(value: Any) -> date | None:
     if isinstance(value, date):
         return value
 
-    text = str(value).strip()
-    if not text:
+    s = str(value).strip()
+    if not s:
         return None
 
     for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"):
         try:
-            return datetime.strptime(text[:19], fmt).date()
+            return datetime.strptime(s[:19], fmt).date()
         except ValueError:
-            continue
+            pass
 
-    parsed = pd.to_datetime(text, errors="coerce")
+    parsed = pd.to_datetime(s, errors="coerce")
     if pd.notna(parsed):
         return parsed.date()
     return None
@@ -94,12 +90,12 @@ def to_int(value: Any, default: int = 0) -> int:
 
 
 def normalize_level(value: Any, default: str = "低") -> str:
-    text = str(value or default).strip()
-    return "高" if text in {"高", "High", "high", "HIGH", "1", "True", "true", "是", "重要", "緊急"} else "低"
+    s = str(value or default).strip()
+    return "高" if s in {"高", "High", "high", "HIGH", "1", "True", "true", "是", "重要", "緊急"} else "低"
 
 
 def get_task_title(task: Task) -> str:
-    return str(task.get("title") or task.get("任務") or task.get("name") or task.get("task") or "未命名任務")
+    return text(task.get("title") or task.get("任務") or task.get("name") or task.get("task"), "未命名任務")
 
 
 def get_progress(task: Task) -> int:
@@ -107,7 +103,7 @@ def get_progress(task: Task) -> int:
 
 
 def get_category(task: Task) -> str:
-    return str(task.get("category") or task.get("分類") or "未分類").strip() or "未分類"
+    return text(task.get("category") or task.get("分類"), "未分類")
 
 
 def get_due_value(task: Task) -> Any:
@@ -117,16 +113,16 @@ def get_due_value(task: Task) -> Any:
 def task_due_status(task: Task) -> Tuple[str, str, int]:
     due = parse_date(get_due_value(task))
     if not due:
-        return "⚪ 未設定期限", "neutral", 999999
+        return "⚪ 未設定期限", "gray", 999999
 
     delta = (due - TODAY).days
     if delta < 0:
-        return f"🔴 已逾期 {abs(delta)} 天", "danger", delta
+        return f"🔴 已逾期 {abs(delta)} 天", "red", delta
     if delta == 0:
-        return "🟡 今日截止", "today", delta
+        return "🟡 今日截止", "orange", delta
     if delta <= 3:
-        return f"🟠 即將到期｜剩 {delta} 天", "warning", delta
-    return f"🟢 正常｜剩 {delta} 天", "safe", delta
+        return f"🟠 即將到期｜剩 {delta} 天", "orange", delta
+    return f"🟢 正常｜剩 {delta} 天", "green", delta
 
 
 def get_priority_score(task: Task) -> int:
@@ -153,28 +149,23 @@ def get_priority_score(task: Task) -> int:
     return score
 
 
-def get_risk_level(score: int) -> Tuple[str, str]:
+def get_risk_level(score: int) -> str:
     if score >= 100:
-        return "Critical", "risk-critical"
+        return "Critical"
     if score >= 75:
-        return "High", "risk-high"
+        return "High"
     if score >= 45:
-        return "Medium", "risk-medium"
-    return "Low", "risk-low"
+        return "Medium"
+    return "Low"
 
 
 def is_active_task(task: Task) -> bool:
-    status = str(task.get("status") or task.get("狀態") or "").strip()
-    category = get_category(task)
-    return status == "Active" and category != "已完成"
+    status = text(task.get("status") or task.get("狀態"))
+    return status == "Active" and get_category(task) != "已完成"
 
 
 def split_quadrants(tasks: Iterable[Task]) -> Tuple[List[Task], List[Task], List[Task], List[Task]]:
-    q1: List[Task] = []
-    q2: List[Task] = []
-    q3: List[Task] = []
-    q4: List[Task] = []
-
+    q1, q2, q3, q4 = [], [], [], []
     for task in tasks:
         imp = normalize_level(task.get("importance", "低"))
         urg = normalize_level(task.get("urgency", "低"))
@@ -261,7 +252,6 @@ def build_export_df(tasks: List[Task]) -> pd.DataFrame:
 
         due_label, _, due_delta = task_due_status(task)
         score = get_priority_score(task)
-        risk_level, _ = get_risk_level(score)
         rows.append({
             "象限": quadrant,
             "任務": get_task_title(task),
@@ -274,14 +264,20 @@ def build_export_df(tasks: List[Task]) -> pd.DataFrame:
             "剩餘天數": due_delta if due_delta != 999999 else "",
             "完成度": get_progress(task),
             "風險分數": score,
-            "風險等級": risk_level,
+            "風險等級": get_risk_level(score),
             "狀態": task.get("status", ""),
         })
     return pd.DataFrame(rows)
 
 
+def badge_people(people: List[str]) -> str:
+    if not people:
+        return "👤 未指派"
+    return "　".join([f"👤 {p}" for p in people])
+
+
 # ============================================================
-# CSS - Enterprise V6
+# CSS：只做外觀，不包住 Streamlit 元件，避免 HTML 外露
 # ============================================================
 
 st.markdown(
@@ -289,140 +285,45 @@ st.markdown(
 <style>
 .block-container { padding-top: .8rem; padding-bottom: 3rem; max-width: 1600px; }
 [data-testid="stSidebar"] { background: #f8fafc; border-right: 1px solid #e5e7eb; }
-
-/* Hide Streamlit default top gap visually */
 #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 
-.enterprise-shell {
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
-    border-radius: 26px;
-    padding: 18px;
-    box-shadow: 0 14px 34px rgba(15, 23, 42, .08);
-}
-
 .enterprise-hero {
-    position: relative;
-    overflow: hidden;
-    background: radial-gradient(circle at top right, rgba(96,165,250,.35), transparent 28%),
-                linear-gradient(135deg, #0f172a 0%, #172554 48%, #1d4ed8 100%);
+    background: linear-gradient(135deg, #0f172a 0%, #172554 48%, #1d4ed8 100%);
     border-radius: 24px;
     padding: 26px 30px;
     margin-bottom: 18px;
     color: white;
     box-shadow: 0 18px 38px rgba(30, 64, 175, .22);
 }
-.enterprise-hero h1 { margin: 0; font-size: 32px; letter-spacing: .2px; font-weight: 950; }
-.enterprise-hero p { margin: 8px 0 0 0; opacity: .92; font-size: 14px; line-height: 1.7; max-width: 980px; }
-.hero-row { display:flex; align-items:center; justify-content:space-between; gap:20px; }
+.enterprise-hero h1 { margin: 0; font-size: 32px; font-weight: 950; }
+.enterprise-hero p { margin: 8px 0 0 0; opacity: .92; font-size: 14px; line-height: 1.7; }
 .version-pill {
     display:inline-block; padding: 7px 12px; border-radius: 999px;
     background: rgba(255,255,255,.16); font-size: 12px; margin-top: 12px; font-weight: 800;
     border: 1px solid rgba(255,255,255,.22);
 }
-.today-pill {
-    padding: 10px 13px; border-radius: 16px; background: rgba(255,255,255,.12);
-    border: 1px solid rgba(255,255,255,.18); font-size: 13px; white-space: nowrap; font-weight: 800;
-}
 
-.kpi-card {
+.kpi-wrap {
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 18px;
-    padding: 16px 18px;
-    min-height: 116px;
+    padding: 14px 16px;
+    min-height: 106px;
     box-shadow: 0 8px 22px rgba(15, 23, 42, .07);
-    position: relative;
-    overflow: hidden;
 }
-.kpi-card:before { content:""; position:absolute; inset:0 0 auto 0; height:5px; background: #2563eb; }
-.kpi-red:before { background:#dc2626; } .kpi-green:before { background:#16a34a; }
-.kpi-yellow:before { background:#eab308; } .kpi-blue:before { background:#2563eb; }
-.kpi-purple:before { background:#7c3aed; }
 .kpi-title { color: #64748b; font-size: 13px; font-weight: 850; }
-.kpi-value { color: #0f172a; font-size: 34px; font-weight: 950; line-height: 1.12; margin-top: 6px; }
+.kpi-value { color: #0f172a; font-size: 32px; font-weight: 950; line-height: 1.12; margin-top: 6px; }
 .kpi-sub { color: #64748b; font-size: 12px; margin-top: 6px; }
 
-.matrix-grid-title {
-    display:flex; align-items:center; justify-content:space-between; gap:12px;
-    margin: 18px 0 12px 0;
-}
-.section-title { font-size: 22px; font-weight: 950; color:#0f172a; }
-.axis-note { font-size: 12px; color:#64748b; background:white; border:1px solid #e5e7eb; border-radius:999px; padding:6px 11px; }
+.quadrant-title { font-size: 20px; font-weight: 950; color: #0f172a; }
+.quadrant-sub { color: #64748b; font-size: 13px; line-height: 1.55; margin-bottom: 8px; }
+.task-mini-title { font-size: 16px; font-weight: 900; }
+.task-meta { color: #475569; font-size: 13px; line-height: 1.8; }
+.small-muted { color:#64748b; font-size: 12px; }
 
-.matrix-box {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 22px;
-    padding: 16px;
-    min-height: 600px;
-    box-shadow: 0 8px 22px rgba(15, 23, 42, .07);
-}
-.matrix-q1 { border-top: 9px solid #dc2626; background: linear-gradient(180deg, #fff6f6 0%, #ffffff 100%); }
-.matrix-q2 { border-top: 9px solid #16a34a; background: linear-gradient(180deg, #f3fff7 0%, #ffffff 100%); }
-.matrix-q3 { border-top: 9px solid #eab308; background: linear-gradient(180deg, #fffbed 0%, #ffffff 100%); }
-.matrix-q4 { border-top: 9px solid #2563eb; background: linear-gradient(180deg, #f3f8ff 0%, #ffffff 100%); }
-.matrix-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-.matrix-title { font-size: 20px; font-weight: 950; color: #0f172a; }
-.matrix-count { font-size: 13px; font-weight: 900; color: #475569; background: white; border:1px solid #e5e7eb; padding: 4px 10px; border-radius: 999px; }
-.matrix-sub { color: #64748b; font-size: 13px; margin-bottom: 14px; line-height: 1.55; }
-
-.task-card {
-    background: rgba(255,255,255,.96);
-    border: 1px solid #e5e7eb;
-    border-left: 6px solid #94a3b8;
-    border-radius: 16px;
-    padding: 13px 14px 12px 14px;
-    margin-bottom: 12px;
-    box-shadow: 0 5px 14px rgba(15, 23, 42, .075);
-    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-}
-.task-card:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(15, 23, 42, .13); border-color: #cbd5e1; }
-.task-card.risk-critical { border-left-color:#991b1b; }
-.task-card.risk-high { border-left-color:#dc2626; }
-.task-card.risk-medium { border-left-color:#f97316; }
-.task-card.risk-low { border-left-color:#2563eb; }
-.task-topline { display:flex; align-items:flex-start; justify-content:space-between; gap: 10px; }
-.task-title { font-size: 15px; font-weight: 950; color: #0f172a; margin-bottom: 8px; line-height:1.35; }
-.risk-chip { font-size: 11px; font-weight: 950; padding: 3px 7px; border-radius:999px; white-space:nowrap; }
-.risk-critical .risk-chip { background:#fee2e2; color:#991b1b; }
-.risk-high .risk-chip { background:#fee2e2; color:#b91c1c; }
-.risk-medium .risk-chip { background:#ffedd5; color:#9a3412; }
-.risk-low .risk-chip { background:#dbeafe; color:#1d4ed8; }
-.task-meta { color: #475569; font-size: 12px; line-height: 1.8; }
-.task-footer { display:flex; justify-content:space-between; align-items:center; margin-top: 9px; gap: 8px; flex-wrap: wrap; }
-.badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size:12px; font-weight:850; margin:0 4px 5px 0; }
-.badge-0 { background:#dbeafe; color:#1d4ed8; } .badge-1 { background:#dcfce7; color:#166534; }
-.badge-2 { background:#ffedd5; color:#9a3412; } .badge-3 { background:#f3e8ff; color:#6b21a8; }
-.badge-4 { background:#e0e7ff; color:#3730a3; }
-.status-pill { display:inline-block; padding:4px 9px; border-radius:999px; font-size:12px; font-weight:900; }
-.status-danger { background:#fee2e2; color:#b91c1c; }
-.status-today { background:#fef3c7; color:#92400e; }
-.status-warning { background:#ffedd5; color:#9a3412; }
-.status-safe { background:#dcfce7; color:#166534; }
-.status-neutral { background:#e5e7eb; color:#475569; }
-.progress-line { display:flex; align-items:center; gap:8px; margin-top: 8px; }
-.progress-bar-wrap { flex:1; background:#e5e7eb; border-radius:999px; height:9px; overflow:hidden; }
-.progress-bar { background: linear-gradient(90deg, #2563eb, #60a5fa); height:9px; border-radius:999px; }
-.progress-text { color:#334155; font-size:12px; font-weight:900; min-width: 38px; text-align:right; }
-.empty-box { background: rgba(255,255,255,.74); border:1px dashed #cbd5e1; border-radius: 15px; padding: 22px; color:#64748b; text-align:center; }
-
-.insight-panel {
-    background: white; border:1px solid #e5e7eb; border-radius: 22px;
-    padding: 16px; box-shadow: 0 8px 22px rgba(15, 23, 42, .07);
-    margin-bottom: 14px;
-}
-.insight-title { font-size: 17px; font-weight: 950; color:#0f172a; margin-bottom: 12px; }
-.insight-item { border:1px solid #e5e7eb; border-radius: 14px; padding:10px 11px; margin-bottom:9px; background:#f8fafc; }
-.insight-name { color:#0f172a; font-weight:900; font-size:13px; line-height:1.45; }
-.insight-meta { color:#64748b; font-size:12px; margin-top:4px; }
-.risk-alert { background:#fff7ed; border:1px solid #fed7aa; border-left:6px solid #f97316; border-radius:16px; padding:12px 14px; color:#9a3412; margin: 8px 0 16px 0; }
-.export-box { background:white; border:1px solid #e5e7eb; border-radius:20px; padding:16px; box-shadow: 0 8px 22px rgba(15, 23, 42, .07); }
-
-@media (max-width: 900px) {
-    .hero-row { flex-direction: column; align-items:flex-start; }
-    .today-pill { white-space: normal; }
-    .matrix-box { min-height: auto; }
+div[data-testid="stVerticalBlockBorderWrapper"] {
+    border-radius: 18px;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, .06);
 }
 </style>
 """,
@@ -459,18 +360,12 @@ high_risk_tasks = [task for task in filtered_tasks if get_priority_score(task) >
 # Header
 # ============================================================
 
-st.markdown('<div class="enterprise-shell">', unsafe_allow_html=True)
 st.markdown(
     f"""
 <div class="enterprise-hero">
-    <div class="hero-row">
-        <div>
-            <h1>🔲 艾森豪矩陣</h1>
-            <p>工程任務優先級控管中心｜用「重要性 × 緊急性」快速判斷立即處理、排程規劃、授權交辦與降載項目。</p>
-            <span class="version-pill">{APP_VERSION}</span>
-        </div>
-        <div class="today-pill">📅 今日：{TODAY.isoformat()}</div>
-    </div>
+    <h1>🔲 艾森豪矩陣</h1>
+    <p>工程任務優先級控管中心｜用「重要性 × 緊急性」快速判斷立即處理、排程規劃、授權交辦與降載項目。</p>
+    <span class="version-pill">{APP_VERSION}｜今日：{TODAY.isoformat()}</span>
 </div>
 """,
     unsafe_allow_html=True,
@@ -480,171 +375,124 @@ if len(active_tasks) == 0:
     st.info("目前沒有 Active 任務可顯示。")
 
 if risk_tasks:
-    st.markdown(
-        f"""
-<div class="risk-alert">
-    ⚠️ 目前篩選結果有 <b>{len(risk_tasks)}</b> 筆任務已逾期或 3 天內到期；其中逾期 <b>{len(overdue_tasks)}</b> 筆、今日截止 <b>{len(today_tasks)}</b> 筆。
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+    st.warning(f"目前篩選結果有 {len(risk_tasks)} 筆任務已逾期或 3 天內到期；其中逾期 {len(overdue_tasks)} 筆、今日截止 {len(today_tasks)} 筆。")
 
 
 # ============================================================
 # KPI Cards
 # ============================================================
 
-k1, k2, k3, k4, k5, k6 = st.columns(6)
-kpis = [
-    (k1, "全部任務", len(filtered_tasks), "目前篩選結果", "kpi-blue"),
-    (k2, "逾期", len(overdue_tasks), "需立即追蹤", "kpi-red"),
-    (k3, "今日截止", len(today_tasks), "今日需處理", "kpi-yellow"),
-    (k4, "高風險", len(high_risk_tasks), "Risk ≥ 75", "kpi-purple"),
-    (k5, "平均完成", f"{completed_avg}%", "任務推進率", "kpi-green"),
-    (k6, "Q1 任務", len(q1), "重要且緊急", "kpi-red"),
-]
-
-for col, title, value, sub, css in kpis:
-    with col:
-        st.markdown(
-            f"""
-<div class="kpi-card {css}">
-    <div class="kpi-title">{safe_text(title)}</div>
-    <div class="kpi-value">{safe_text(value)}</div>
-    <div class="kpi-sub">{safe_text(sub)}</div>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-
-# ============================================================
-# Render HTML Components
-# ============================================================
-
-def build_task_card_html(task: Task) -> str:
-    title = safe_text(get_task_title(task), "未命名任務")
-    category = safe_text(get_category(task), "未分類")
-    due_raw = get_due_value(task)
-    due = safe_text(due_raw, "未設定")
-    progress = get_progress(task)
-    due_label, due_class, _ = task_due_status(task)
-    score = get_priority_score(task)
-    risk_level, risk_css = get_risk_level(score)
-
-    people = normalize_people(task.get("assignees"))
-    if people:
-        badges = "".join(
-            f'<span class="badge badge-{idx % 5}">👤 {safe_text(person)}</span>'
-            for idx, person in enumerate(people)
-        )
-    else:
-        badges = '<span class="badge badge-0">👤 未指派</span>'
-
-    description = safe_text(task.get("description") or task.get("notes") or task.get("備註") or "")
-    desc_html = f'<div class="task-meta">📝 {description}</div>' if description else ""
-
-    return f"""
-<div class="task-card {risk_css}">
-    <div class="task-topline">
-        <div class="task-title">📌 {title}</div>
-        <span class="risk-chip">{safe_text(risk_level)}｜{score}</span>
-    </div>
-    <div>{badges}</div>
-    <div class="task-meta">🏷️ {category}　｜　📅 {due}</div>
-    {desc_html}
-    <div class="progress-line">
-        <div class="progress-bar-wrap"><div class="progress-bar" style="width:{progress}%;"></div></div>
-        <div class="progress-text">{progress}%</div>
-    </div>
-    <div class="task-footer">
-        <span class="status-pill status-{due_class}">{safe_text(due_label)}</span>
-        <span class="task-meta">風險分數 {score}</span>
-    </div>
-</div>
-"""
-
-
-def render_quadrant(css_class: str, icon: str, title: str, subtitle: str, tasks: List[Task]) -> None:
-    cards_html = "".join(build_task_card_html(task) for task in tasks)
-    if not cards_html:
-        cards_html = '<div class="empty-box">目前沒有任務</div>'
-
+def render_kpi(title: str, value: Any, sub: str) -> None:
     st.markdown(
         f"""
-<div class="matrix-box {css_class}">
-    <div class="matrix-header">
-        <div>
-            <div class="matrix-title">{safe_text(icon)} {safe_text(title)}</div>
-            <div class="matrix-sub">{safe_text(subtitle)}</div>
-        </div>
-        <div class="matrix-count">{len(tasks)} Tasks</div>
-    </div>
-    {cards_html}
+<div class="kpi-wrap">
+    <div class="kpi-title">{title}</div>
+    <div class="kpi-value">{value}</div>
+    <div class="kpi-sub">{sub}</div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
+k1, k2, k3, k4, k5, k6 = st.columns(6)
+with k1: render_kpi("全部任務", len(filtered_tasks), "目前篩選結果")
+with k2: render_kpi("逾期", len(overdue_tasks), "需立即追蹤")
+with k3: render_kpi("今日截止", len(today_tasks), "今日需處理")
+with k4: render_kpi("高風險", len(high_risk_tasks), "Risk ≥ 75")
+with k5: render_kpi("平均完成", f"{completed_avg}%", "任務推進率")
+with k6: render_kpi("Q1 任務", len(q1), "重要且緊急")
 
-def insight_item_html(task: Task) -> str:
-    title = safe_text(get_task_title(task), "未命名任務")
-    due_label, _, _ = task_due_status(task)
-    people = ", ".join(normalize_people(task.get("assignees"))) or "未指派"
+st.divider()
+
+
+# ============================================================
+# Native Render Components：避免 HTML 片段外露
+# ============================================================
+
+def render_task_card(task: Task) -> None:
+    title = get_task_title(task)
+    category = get_category(task)
+    due = text(get_due_value(task), "未設定")
+    progress = get_progress(task)
+    due_label, color, _ = task_due_status(task)
     score = get_priority_score(task)
-    return f"""
-<div class="insight-item">
-    <div class="insight-name">{title}</div>
-    <div class="insight-meta">{safe_text(due_label)}｜Risk {score}｜{safe_text(people)}</div>
-</div>
-"""
+    risk_level = get_risk_level(score)
+    people = normalize_people(task.get("assignees"))
+    description = text(task.get("description") or task.get("notes") or task.get("備註"))
+
+    with st.container(border=True):
+        top_l, top_r = st.columns([4, 1])
+        with top_l:
+            st.markdown(f"<div class='task-mini-title'>📌 {title}</div>", unsafe_allow_html=True)
+        with top_r:
+            st.badge(f"{risk_level}｜{score}", color="red" if score >= 75 else "orange" if score >= 45 else "blue")
+
+        st.markdown(f"<div class='task-meta'>{badge_people(people)}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='task-meta'>🏷️ {category}　｜　📅 {due}</div>", unsafe_allow_html=True)
+        if description:
+            st.caption(f"📝 {description}")
+
+        st.progress(progress, text=f"完成度 {progress}%")
+
+        foot_l, foot_r = st.columns([2, 1])
+        with foot_l:
+            st.badge(due_label, color=color)
+        with foot_r:
+            st.caption(f"風險分數 {score}")
+
+
+def render_quadrant(icon: str, title: str, subtitle: str, tasks: List[Task]) -> None:
+    with st.container(border=True):
+        head_l, head_r = st.columns([3, 1])
+        with head_l:
+            st.markdown(f"<div class='quadrant-title'>{icon} {title}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='quadrant-sub'>{subtitle}</div>", unsafe_allow_html=True)
+        with head_r:
+            st.badge(f"{len(tasks)} Tasks", color="blue")
+
+        if not tasks:
+            st.info("目前沒有任務")
+        else:
+            for task in tasks:
+                render_task_card(task)
 
 
 def render_insight_panel(title: str, tasks: List[Task], empty_text: str) -> None:
-    body = "".join(insight_item_html(task) for task in tasks[:5])
-    if not body:
-        body = f'<div class="empty-box">{safe_text(empty_text)}</div>'
-    st.markdown(
-        f"""
-<div class="insight-panel">
-    <div class="insight-title">{safe_text(title)}</div>
-    {body}
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+    with st.container(border=True):
+        st.subheader(title)
+        if not tasks:
+            st.info(empty_text)
+            return
+        for task in tasks[:5]:
+            score = get_priority_score(task)
+            due_label, color, _ = task_due_status(task)
+            people = ", ".join(normalize_people(task.get("assignees"))) or "未指派"
+            with st.container(border=True):
+                st.markdown(f"**{get_task_title(task)}**")
+                st.caption(f"{due_label}｜Risk {score}｜{people}")
 
 
 # ============================================================
 # Enterprise Matrix + Insight Panel
 # ============================================================
 
-st.markdown(
-    """
-<div class="matrix-grid-title">
-    <div class="section-title">📌 Priority Matrix</div>
-    <div class="axis-note">重要 ↑ ｜ 緊急 ← → 不緊急</div>
-</div>
-""",
-    unsafe_allow_html=True,
-)
+st.markdown("### 📌 Priority Matrix")
+st.caption("重要 ↑ ｜緊急 ← → 不緊急")
 
 matrix_area, insight_area = st.columns([3.4, 1.05], gap="large")
 
 with matrix_area:
     row1_left, row1_right = st.columns(2, gap="large")
     with row1_left:
-        render_quadrant("matrix-q1", "🔥", "第一象限", "重要且緊急｜立即處理、主管追蹤、優先排除阻塞", q1)
+        render_quadrant("🔥", "第一象限", "重要且緊急｜立即處理、主管追蹤、優先排除阻塞", q1)
     with row1_right:
-        render_quadrant("matrix-q2", "📅", "第二象限", "重要但不緊急｜排程規劃、預防性改善、專案推進", q2)
-
-    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+        render_quadrant("📅", "第二象限", "重要但不緊急｜排程規劃、預防性改善、專案推進", q2)
 
     row2_left, row2_right = st.columns(2, gap="large")
     with row2_left:
-        render_quadrant("matrix-q3", "🤝", "第三象限", "緊急但不重要｜授權交辦、標準化處理、避免打斷核心工作", q3)
+        render_quadrant("🤝", "第三象限", "緊急但不重要｜授權交辦、標準化處理、避免打斷核心工作", q3)
     with row2_right:
-        render_quadrant("matrix-q4", "⚪", "第四象限", "不重要且不緊急｜降低投入、暫緩、合併或取消", q4)
+        render_quadrant("⚪", "第四象限", "不重要且不緊急｜降低投入、暫緩、合併或取消", q4)
 
 with insight_area:
     top_risk = sort_tasks(filtered_tasks, "風險分數優先")
@@ -659,8 +507,7 @@ with insight_area:
 # Export / Management View
 # ============================================================
 
-st.markdown("<div style='height:18px'></div>", unsafe_allow_html=True)
-st.markdown('<div class="export-box">', unsafe_allow_html=True)
+st.divider()
 st.subheader("📊 管理檢視與匯出")
 export_df = build_export_df(filtered_tasks)
 
@@ -679,5 +526,3 @@ with right_export:
     st.caption("匯出內容會依照目前側邊欄篩選結果產生。")
 
 st.caption(f"最後檢視日期：{TODAY.isoformat()}｜{APP_VERSION}")
-st.markdown('</div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
