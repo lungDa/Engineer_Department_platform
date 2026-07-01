@@ -248,7 +248,29 @@ with tab_gantt:
             legend_title=view_mode.replace("依", ""),
             margin=dict(l=20, r=20, t=60, b=20),
         )
-        fig.add_vline(x=TODAY, line_dash="dash", annotation_text="今日", annotation_position="top")
+        # Plotly 在 Streamlit Cloud / Python 3.14 環境下，
+        # add_vline + datetime + annotation_text 會觸發 TypeError。
+        # 因此改用 add_shape 畫今日線，再用 add_annotation 顯示文字。
+        today_x = pd.to_datetime(TODAY)
+        fig.add_shape(
+            type="line",
+            x0=today_x,
+            x1=today_x,
+            y0=0,
+            y1=1,
+            xref="x",
+            yref="paper",
+            line=dict(dash="dash", width=2),
+        )
+        fig.add_annotation(
+            x=today_x,
+            y=1.02,
+            xref="x",
+            yref="paper",
+            text="今日",
+            showarrow=False,
+            yanchor="bottom",
+        )
         st.plotly_chart(fig, use_container_width=True)
 
 with tab_table:
