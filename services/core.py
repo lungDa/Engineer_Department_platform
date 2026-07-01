@@ -63,8 +63,19 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
+    VERSION = "V3.4 Enterprise Turbo Edition"
+
     @staticmethod
-    def setup():
+    def setup(load_tasks: bool = True, load_meetings: bool = False, load_approvals: bool = False):
+        """V3.4 Turbo 初始化。
+
+        原本每次進入任一頁面都讀 Users / Categories / Tags / Tasks / Meetings / Approvals。
+        這版改成：
+        - 首頁與任務頁只載入必要資料。
+        - Meetings / Approvals 採 Lazy Load，進入該頁面才讀。
+        - 已載入資料會放在 session_state，Google Sheet 讀取由 SheetDB 分層快取控管。
+        """
+        st.session_state.setdefault("app_version", AppInitializer.VERSION)
         st.session_state.setdefault("user_records_fallback", UserService.default_users())
         st.session_state.setdefault("announcements_fallback", [])
         st.session_state.setdefault("tasks_fallback", TaskService.default_tasks())
@@ -72,16 +83,30 @@ class AppInitializer:
         st.session_state.setdefault("tags_fallback", TagService.default_tags())
         st.session_state.setdefault("meetings_fallback", MeetingService.default_meetings())
         st.session_state.setdefault("approvals_fallback", ApprovalService.default_approvals())
+        st.session_state.setdefault("tasks", st.session_state.get("tasks_fallback", []))
+        st.session_state.setdefault("meetings", st.session_state.get("meetings_fallback", []))
+        st.session_state.setdefault("approvals", st.session_state.get("approvals_fallback", []))
 
         users = UserService.get_active_users()
-        st.session_state.partners = UserService.get_partner_names()
-        st.session_state.roles = {u.get("name", ""): parse_int(u.get("role_level", 0), 0) for u in users}
+        partners = []
+        seen = set()
+        for user in users:
+            name = str(user.get("name", "")).strip()
+            if name and name not in seen:
+                seen.add(name)
+                partners.append(name)
 
+        st.session_state.partners = sorted(partners)
+        st.session_state.roles = {u.get("name", ""): parse_int(u.get("role_level", 0), 0) for u in users}
         st.session_state.categories = CategoryService.load_names()
         st.session_state.tags_list = TagService.load_names()
-        st.session_state.tasks = TaskService.load_all()
-        st.session_state.meetings = MeetingService.load_all()
-        st.session_state.approvals = ApprovalService.load_all()
+
+        if load_tasks:
+            st.session_state.tasks = TaskService.load_all()
+        if load_meetings:
+            st.session_state.meetings = MeetingService.load_all()
+        if load_approvals:
+            st.session_state.approvals = ApprovalService.load_all()
 
         st.session_state.setdefault("cal_year", date.today().year)
         st.session_state.setdefault("cal_month", date.today().month)
