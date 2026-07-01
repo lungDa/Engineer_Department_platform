@@ -24,14 +24,14 @@ from utils import AppInitializer
 # ============================================================
 
 st.set_page_config(
-    page_title="艾森豪矩陣 | Enterprise V7 Dark",
+    page_title="艾森豪矩陣",
     page_icon="🔲",
     layout="wide",
 )
 
 AppInitializer.setup()
 
-APP_VERSION = "V7 Enterprise Matrix Dashboard - Dark KPI"
+APP_VERSION = "Dark KPI"
 TODAY = date.today()
 Task = Dict[str, Any]
 
