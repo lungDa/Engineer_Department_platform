@@ -40,8 +40,17 @@ class ViewComponents:
 
     @staticmethod
     def render_public_sidebar():
-        st.sidebar.title("導覽控制")
-        st.sidebar.info(f"目前版本 {st.session_state.get('app_version', 'V3.5 Enterprise UI')}")
+        st.sidebar.markdown(
+            f"""
+            <div class="edp-sidebar-brand">
+                <div class="edp-sidebar-title">鋒霈工程部平台</div>
+                <div class="edp-sidebar-sub">Project · Task · Meeting · Approval</div>
+                <div class="edp-version-pill">● {st.session_state.get('app_version', 'V3.7 Enterprise Theme V1')}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.sidebar.caption("請使用上方導覽切換功能模組。")
 
         # Google Sheet 連線診斷預設完全隱藏。
         # 只有首頁「🛠️ 開發者」驗證成功後，左側才顯示簡要狀態與重新測試按鈕。
