@@ -24,7 +24,7 @@ from utils import AppInitializer
 # ============================================================
 
 st.set_page_config(
-    page_title="艾森豪矩陣 | Enterprise V6.1",
+    page_title="艾森豪矩陣",
     page_icon="🔲",
     layout="wide",
 )
