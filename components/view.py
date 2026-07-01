@@ -17,8 +17,8 @@ class ViewComponents:
 
     @staticmethod
     def render_filters():
-        # 指派對象一律即時讀取 Users 工作表，不再依賴固定 session 名單。
-        partner_options = UserService.get_partner_names()
+        # V3.4 Turbo：篩選選單優先使用 AppInitializer 已快取的人員清單，避免每次展開篩選器重讀 Users。
+        partner_options = st.session_state.get("partners") or UserService.get_partner_names()
         tag_options = st.session_state.get("tags_list", [])
 
         with st.expander("🔍 進階多維度篩選器", expanded=False):
@@ -41,7 +41,7 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info("目前版本 V1.6.18")
+        st.sidebar.info(f"目前版本 {st.session_state.get('app_version', 'V3.4 Enterprise Turbo Edition')}")
 
         # Google Sheet 連線診斷預設完全隱藏。
         # 只有首頁「🛠️ 開發者」驗證成功後，左側才顯示簡要狀態與重新測試按鈕。
