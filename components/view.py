@@ -41,7 +41,7 @@ class ViewComponents:
     @staticmethod
     def render_public_sidebar():
         st.sidebar.title("導覽控制")
-        st.sidebar.info(f"目前版本 {st.session_state.get('app_version', 'V1.7.1 Enterprise Turbo Edition')}")
+        st.sidebar.info(f"目前版本 {st.session_state.get('app_version', 'V3.5 Enterprise UI')}")
 
         # Google Sheet 連線診斷預設完全隱藏。
         # 只有首頁「🛠️ 開發者」驗證成功後，左側才顯示簡要狀態與重新測試按鈕。
