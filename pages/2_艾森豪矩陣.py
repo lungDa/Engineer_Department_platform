@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 pages/2_艾森豪矩陣.py
-Enterprise Matrix Dashboard V6.1 Fixed
+Enterprise Matrix Dashboard V7 Dark KPI
 
 修正重點：
 - 任務卡改用 Streamlit 原生元件 + st.progress，避免 HTML 片段外露
@@ -24,14 +24,14 @@ from utils import AppInitializer
 # ============================================================
 
 st.set_page_config(
-    page_title="艾森豪矩陣",
+    page_title="艾森豪矩陣 | Enterprise V7 Dark",
     page_icon="🔲",
     layout="wide",
 )
 
 AppInitializer.setup()
 
-APP_VERSION = "V6.1 Enterprise Matrix Dashboard - Fixed UI"
+APP_VERSION = "V7 Enterprise Matrix Dashboard - Dark KPI"
 TODAY = date.today()
 Task = Dict[str, Any]
 
@@ -283,53 +283,186 @@ def badge_people(people: List[str]) -> str:
 st.markdown(
     """
 <style>
-.block-container { padding-top: .8rem; padding-bottom: 3rem; max-width: 1600px; }
-[data-testid="stSidebar"] { background: linear-gradient(180deg,#020617 0%,#0f172a 55%,#111827 100%) !important; border-right: 1px solid rgba(148,163,184,.18) !important; }
-#MainMenu {visibility: hidden;} footer {visibility: hidden;}
-
-.enterprise-hero {
-    background: linear-gradient(135deg, #0f172a 0%, #172554 48%, #1d4ed8 100%);
-    border-radius: 24px;
-    padding: 26px 30px;
-    margin-bottom: 18px;
-    color: white;
-    box-shadow: 0 18px 38px rgba(30, 64, 175, .22);
-}
-.enterprise-hero h1 { margin: 0; font-size: 32px; font-weight: 950; }
-.enterprise-hero p { margin: 8px 0 0 0; opacity: .92; font-size: 14px; line-height: 1.7; }
-.version-pill {
-    display:inline-block; padding: 7px 12px; border-radius: 999px;
-    background: rgba(255,255,255,.16); font-size: 12px; margin-top: 12px; font-weight: 800;
-    border: 1px solid rgba(255,255,255,.22);
+:root{
+    --bg-main:#0F172A;
+    --bg-sidebar:#111827;
+    --bg-card:#1E293B;
+    --bg-card-2:#111827;
+    --border:#334155;
+    --text-main:#F8FAFC;
+    --text-muted:#CBD5E1;
+    --text-soft:#94A3B8;
+    --blue:#2563EB;
+    --green:#16A34A;
+    --orange:#F59E0B;
+    --red:#DC2626;
+    --purple:#8B5CF6;
 }
 
-.kpi-wrap {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 18px;
-    padding: 14px 16px;
-    min-height: 106px;
-    box-shadow: 0 8px 22px rgba(15, 23, 42, .07);
+/* Page / Sidebar */
+.stApp, section.main, .main, .main .block-container{
+    background:var(--bg-main) !important;
+    color:var(--text-main) !important;
 }
-.kpi-title { color: #64748b; font-size: 13px; font-weight: 850; }
-.kpi-value { color: #0f172a; font-size: 32px; font-weight: 950; line-height: 1.12; margin-top: 6px; }
-.kpi-sub { color: #64748b; font-size: 12px; margin-top: 6px; }
-
-.quadrant-title { font-size: 20px; font-weight: 950; color: #0f172a; }
-.quadrant-sub { color: #64748b; font-size: 13px; line-height: 1.55; margin-bottom: 8px; }
-.task-mini-title { font-size: 16px; font-weight: 900; }
-.task-meta { color: #475569; font-size: 13px; line-height: 1.8; }
-.small-muted { color:#64748b; font-size: 12px; }
-
-div[data-testid="stVerticalBlockBorderWrapper"] {
-    border-radius: 18px;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, .06);
+.block-container{
+    padding-top:.8rem;
+    padding-bottom:3rem;
+    max-width:1600px;
 }
+[data-testid="stSidebar"],
+[data-testid="stSidebarContent"]{
+    background:var(--bg-sidebar) !important;
+    color:var(--text-main) !important;
+    border-right:1px solid #1f2937;
+}
+#MainMenu{visibility:hidden;} footer{visibility:hidden;}
+
+/* Text */
+h1,h2,h3,h4,h5,h6,p,label,span,div{
+    color:var(--text-main) !important;
+}
+small, .stCaption, [data-testid="stCaptionContainer"], .small-muted{
+    color:var(--text-soft) !important;
+}
+
+/* Header */
+.enterprise-hero{
+    background:linear-gradient(135deg,#020617 0%,#111827 42%,#1E3A8A 100%);
+    border:1px solid var(--border);
+    border-radius:24px;
+    padding:26px 30px;
+    margin-bottom:18px;
+    color:white;
+    box-shadow:0 18px 44px rgba(0,0,0,.45);
+}
+.enterprise-hero h1{margin:0;font-size:32px;font-weight:950;color:#fff !important;}
+.enterprise-hero p{margin:8px 0 0 0;color:var(--text-muted) !important;font-size:14px;line-height:1.7;}
+.version-pill{
+    display:inline-block;
+    padding:7px 12px;
+    border-radius:999px;
+    background:rgba(37,99,235,.24);
+    font-size:12px;
+    margin-top:12px;
+    font-weight:800;
+    border:1px solid rgba(96,165,250,.35);
+    color:#DBEAFE !important;
+}
+
+/* KPI Cards - Dark Enterprise */
+.kpi-wrap{
+    background:linear-gradient(180deg,#1E293B 0%,#111827 100%) !important;
+    border:1px solid var(--border) !important;
+    border-radius:18px;
+    padding:16px 18px;
+    min-height:112px;
+    box-shadow:0 10px 26px rgba(0,0,0,.38);
+    transition:all .22s ease;
+    position:relative;
+    overflow:hidden;
+}
+.kpi-wrap::before{
+    content:"";
+    position:absolute;
+    inset:0 auto 0 0;
+    width:6px;
+    background:var(--blue);
+    opacity:.95;
+}
+.kpi-wrap:hover{
+    transform:translateY(-3px);
+    box-shadow:0 16px 34px rgba(0,0,0,.50);
+    border-color:#475569 !important;
+}
+.kpi-title{
+    color:var(--text-muted) !important;
+    font-size:13px;
+    font-weight:850;
+    letter-spacing:.02em;
+    padding-left:4px;
+}
+.kpi-value{
+    color:#FFFFFF !important;
+    font-size:34px;
+    font-weight:950;
+    line-height:1.12;
+    margin-top:8px;
+    padding-left:4px;
+}
+.kpi-sub{
+    color:var(--text-soft) !important;
+    font-size:12px;
+    margin-top:8px;
+    padding-left:4px;
+}
+
+/* KPI accent colors by order */
+div[data-testid="column"]:nth-of-type(1) .kpi-wrap::before{background:var(--blue);}
+div[data-testid="column"]:nth-of-type(2) .kpi-wrap::before{background:var(--red);}
+div[data-testid="column"]:nth-of-type(3) .kpi-wrap::before{background:var(--orange);}
+div[data-testid="column"]:nth-of-type(4) .kpi-wrap::before{background:var(--purple);}
+div[data-testid="column"]:nth-of-type(5) .kpi-wrap::before{background:var(--green);}
+div[data-testid="column"]:nth-of-type(6) .kpi-wrap::before{background:#38BDF8;}
+
+/* Streamlit containers / cards */
+div[data-testid="stVerticalBlockBorderWrapper"]{
+    background:var(--bg-card) !important;
+    border:1px solid var(--border) !important;
+    border-radius:18px !important;
+    box-shadow:0 8px 24px rgba(0,0,0,.34);
+}
+[data-testid="column"]{background:transparent !important;}
+
+.quadrant-title{font-size:20px;font-weight:950;color:#FFFFFF !important;}
+.quadrant-sub{color:var(--text-soft) !important;font-size:13px;line-height:1.55;margin-bottom:8px;}
+.task-mini-title{font-size:16px;font-weight:900;color:#FFFFFF !important;}
+.task-meta{color:var(--text-muted) !important;font-size:13px;line-height:1.8;}
+
+/* Inputs */
+.stTextInput input,
+.stTextArea textarea,
+.stSelectbox div[data-baseweb="select"],
+.stMultiSelect div[data-baseweb="select"]{
+    background:#0B1220 !important;
+    color:var(--text-main) !important;
+    border:1px solid var(--border) !important;
+    border-radius:10px !important;
+}
+
+/* Buttons */
+.stButton>button,
+.stDownloadButton>button{
+    background:var(--blue) !important;
+    color:#FFF !important;
+    border:none !important;
+    border-radius:10px !important;
+    font-weight:800 !important;
+}
+.stButton>button:hover,
+.stDownloadButton>button:hover{
+    background:#1D4ED8 !important;
+    transform:translateY(-1px);
+}
+
+/* Alerts */
+[data-testid="stAlert"]{
+    background:#111827 !important;
+    border:1px solid var(--border) !important;
+    color:var(--text-main) !important;
+}
+
+/* Dataframe */
+[data-testid="stDataFrame"]{
+    background:var(--bg-card) !important;
+    border:1px solid var(--border) !important;
+    border-radius:14px !important;
+}
+
+hr{border-color:var(--border) !important;}
 </style>
 """,
     unsafe_allow_html=True,
 )
-
 
 # ============================================================
 # Data Loading
