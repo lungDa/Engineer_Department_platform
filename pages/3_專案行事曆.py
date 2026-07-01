@@ -6,7 +6,7 @@ from utils import ViewComponents
 
 from utils import AppInitializer, StreamFlowEngine, ViewComponents, TaskService # 根據該頁面需求 import
 from utils import MeetingService
-AppInitializer.setup()
+AppInitializer.setup(load_meetings=True)
 st.header("📅 專案行事曆")
 
 
