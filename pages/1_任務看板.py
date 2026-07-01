@@ -1,10 +1,69 @@
 import streamlit as st
 from utils import ViewComponents, TaskService, StreamFlowEngine as engine
-from utils import AppInitializer
+from utils import AppInitializer, UserService
 
 st.header("📋 任務看板")
 
 AppInitializer.setup()
+
+with st.expander("📝 快速建立任務", expanded=False):
+    with st.form("task_board_quick_add_task_form", clear_on_submit=True):
+        publisher_account = st.text_input("發布人工號 / 帳號")
+        publisher_password = st.text_input("發布人密碼", type="password")
+        t_title = st.text_input("任務名稱")
+
+        c1, c2, c3 = st.columns([1.2, 1.2, 2])
+        with c1:
+            t_cat = st.selectbox("分類", st.session_state.categories)
+        with c2:
+            t_due = st.date_input("排程日期", st.session_state.selected_date)
+        with c3:
+            t_assign = st.multiselect("👥 指派", UserService.get_partner_names())
+
+        c4, c5 = st.columns(2)
+        with c4:
+            t_imp = st.selectbox("重要度", ["高", "低"])
+        with c5:
+            t_urg = st.selectbox("緊急度", ["高", "低"])
+
+        submitted = st.form_submit_button("建立任務", width="stretch")
+        if submitted:
+            if not publisher_account.strip() or not publisher_password:
+                st.warning("請輸入發布人的工號與密碼。")
+            elif not t_title.strip():
+                st.warning("請輸入任務名稱。")
+            else:
+                ok, msg, publisher = UserService.authenticate(publisher_account, publisher_password)
+                if not ok:
+                    st.error(msg)
+                else:
+                    author = publisher.get("name") or publisher.get("account") or publisher_account
+                    account = publisher.get("account") or publisher_account
+                    new_t = {
+                        "title": t_title,
+                        "category": t_cat,
+                        "due": t_due,
+                        "assignees": t_assign,
+                        "status": "Active",
+                        "progress": 0,
+                        "hours_spent": 0.0,
+                        "importance": t_imp,
+                        "urgency": t_urg,
+                        "tags": "",
+                        "notes": "",
+                        "depends_on": [],
+                        "history": [],
+                    }
+                    engine.add_log(new_t, "透過任務看板快速建立任務", author=author)
+                    try:
+                        TaskService.add_task(new_t, author=author, account=account)
+                        st.success(f"任務已建立並寫入 Google Sheet。發布人：{author}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"任務寫入 Google Sheet 失敗：{e}")
+                        if st.session_state.get("sheet_db_error"):
+                            with st.expander("Google Sheet 寫入錯誤詳情", expanded=False):
+                                st.code(str(st.session_state.get("sheet_db_error")), language="text")
 
 f_assignees, f_tags = ViewComponents.render_filters()
 
