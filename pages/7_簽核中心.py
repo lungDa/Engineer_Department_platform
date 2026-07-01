@@ -3,7 +3,7 @@ from datetime import datetime
 from utils import StreamFlowEngine as engine
 from utils import AppInitializer, StreamFlowEngine, ViewComponents, TaskService,ApprovalService # 根據該頁面需求 import
 
-AppInitializer.setup()
+AppInitializer.setup(load_tasks=False, load_approvals=True)
 
 st.header("✍️ 文件簽核系統(Workflow)待開發")
 
@@ -15,7 +15,6 @@ with st.expander("📝 發起新簽呈"):
 
         if st.form_submit_button("送出簽呈"):
             new_app = {
-                "id": len(st.session_state.approvals) + 1,
                 "type": t,
                 "content": c,
                 "sender": st.session_state.current_user,
@@ -25,9 +24,12 @@ with st.expander("📝 發起新簽呈"):
             }
 
             engine.add_log(new_app, "發起申請")
-            st.session_state.approvals.append(new_app)
-            st.success("簽呈已送出！")
-            st.rerun()
+            try:
+                ApprovalService.add_approval(new_app, author=st.session_state.current_user, account="")
+                st.success("簽呈已送出並寫入 Google Sheet！")
+                st.rerun()
+            except Exception as e:
+                st.error(f"簽呈寫入失敗：{e}")
 
 c1, c2 = st.columns(2)
 
