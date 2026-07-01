@@ -284,7 +284,7 @@ st.markdown(
     """
 <style>
 .block-container { padding-top: .8rem; padding-bottom: 3rem; max-width: 1600px; }
-[data-testid="stSidebar"] { background: #f8fafc; border-right: 1px solid #e5e7eb; }
+[data-testid="stSidebar"] { background: linear-gradient(180deg,#020617 0%,#0f172a 55%,#111827 100%) !important; border-right: 1px solid rgba(148,163,184,.18) !important; }
 #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 
 .enterprise-hero {
