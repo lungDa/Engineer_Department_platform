@@ -63,7 +63,7 @@ class ViewComponents:
 
         with st.sidebar.expander("👥 人員資料提醒", expanded=False):
             st.caption("任務、會議、簽核與公告發布都會檢查 Users 工作表中的工號與密碼。")
-            st.caption("Users 工作表建議保留欄位：name、account、password、role、role_level、active。")
+            st.caption("以上")
 
     @staticmethod
     def get_active_announcement_count():
