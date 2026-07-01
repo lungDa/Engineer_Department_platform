@@ -1,22 +1,6 @@
 import streamlit as st
 from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDiagnostics, SheetDB
 
-# ─── 1. 建立 FastAPI 網頁伺服器 ───
-app = FastAPI()
-
-
-@app.get("/")
-async def home_get():
-    return {"status": "🤖 專業整合平台 24H 暢通運作中！"}
-
-
-@app.head("/")
-async def home_head():
-    # HEAD 請求不需要回傳內容
-    return Response(status_code=200)
-
-
-
 st.set_page_config(page_title="鋒霈 工程部 專業系統", layout="wide")
 
 AppInitializer.setup()
