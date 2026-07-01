@@ -1,5 +1,6 @@
 import json
 import os
+import time
 import traceback
 from typing import Any
 
@@ -50,6 +51,19 @@ def _cached_sheet_records(name: str, columns_json: str, default_rows_json: str, 
 
 
 class SheetDB:
+    # V3.4 Enterprise Turbo Edition
+    # 依工作表用途分層快取：慢變資料拉長 TTL，熱資料縮短 TTL。
+    # 這一層是 session cache，會先擋掉同一位使用者換頁/重跑造成的重複 Google API 讀取。
+    SHEET_TTL_SECONDS = {
+        "Users": 600,
+        "Categories": 1800,
+        "Tags": 1800,
+        "Tasks": 5,
+        "Announcements": 10,
+        "Meetings": 10,
+        "Approvals": 10,
+    }
+
     SCOPES = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
@@ -228,7 +242,7 @@ class SheetDB:
             return SheetDB._set_error(f"{error_type}: {e}{hint}\n\n--- traceback ---\n{full}")
 
     @staticmethod
-    def clear_cache():
+    def clear_cache(sheet_name: str | None = None):
         try:
             _cached_spreadsheet.clear()
         except Exception:
@@ -237,6 +251,14 @@ class SheetDB:
             _cached_sheet_records.clear()
         except Exception:
             pass
+
+        if sheet_name:
+            st.session_state.pop(SheetDB.session_cache_key(sheet_name), None)
+        else:
+            for key in list(st.session_state.keys()):
+                if str(key).startswith("sheet_db_session_cache__"):
+                    st.session_state.pop(key, None)
+
         st.session_state["sheet_db_cache_version"] = st.session_state.get("sheet_db_cache_version", 0) + 1
         st.session_state.pop("sheet_db_error", None)
         st.session_state.pop("sheet_db_connected", None)
@@ -247,12 +269,46 @@ class SheetDB:
         return int(st.session_state.get("sheet_db_cache_version", 0))
 
     @staticmethod
-    def bump_cache_version():
+    def bump_cache_version(sheet_name: str | None = None):
         st.session_state["sheet_db_cache_version"] = SheetDB.cache_version() + 1
         try:
             _cached_sheet_records.clear()
         except Exception:
             pass
+        if sheet_name:
+            st.session_state.pop(SheetDB.session_cache_key(sheet_name), None)
+        else:
+            for key in list(st.session_state.keys()):
+                if str(key).startswith("sheet_db_session_cache__"):
+                    st.session_state.pop(key, None)
+
+    @staticmethod
+    def session_cache_key(name: str) -> str:
+        return f"sheet_db_session_cache__{name}"
+
+    @staticmethod
+    def sheet_ttl(name: str) -> int:
+        return int(SheetDB.SHEET_TTL_SECONDS.get(name, 30))
+
+    @staticmethod
+    def get_session_cached(name: str, cache_version: int):
+        payload = st.session_state.get(SheetDB.session_cache_key(name))
+        if not payload:
+            return None
+        if payload.get("version") != cache_version:
+            return None
+        ttl = SheetDB.sheet_ttl(name)
+        if time.time() - float(payload.get("stored_at", 0)) > ttl:
+            return None
+        return payload.get("records")
+
+    @staticmethod
+    def set_session_cached(name: str, records):
+        st.session_state[SheetDB.session_cache_key(name)] = {
+            "version": SheetDB.cache_version(),
+            "stored_at": time.time(),
+            "records": records,
+        }
 
     @staticmethod
     def using_google_sheet() -> bool:
@@ -338,16 +394,24 @@ class SheetDB:
         return [{col: row.get(col, "") for col in columns} for row in records]
 
     @staticmethod
-    def load(name: str, columns: list[str], default_rows: list[dict[str, Any]] | None = None) -> list[dict[str, Any]] | None:
+    def load(name: str, columns: list[str], default_rows: list[dict[str, Any]] | None = None, force_refresh: bool = False) -> list[dict[str, Any]] | None:
         try:
+            version = SheetDB.cache_version()
+            if not force_refresh:
+                session_records = SheetDB.get_session_cached(name, version)
+                if session_records is not None:
+                    return session_records
+
             columns_json = json.dumps(columns, ensure_ascii=False)
             default_rows_json = json.dumps(default_rows or [], ensure_ascii=False, default=str)
             records = _cached_sheet_records(
                 name,
                 columns_json,
                 default_rows_json,
-                SheetDB.cache_version(),
+                version,
             )
+            if records is not None:
+                SheetDB.set_session_cached(name, records)
             return records
         except Exception as e:
             SheetDB._set_error(f"讀取工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
@@ -367,7 +431,7 @@ class SheetDB:
             ])
             ws.clear()
             SheetDB.update_values(ws, "A1", values)
-            SheetDB.bump_cache_version()
+            SheetDB.bump_cache_version(name)
             return True
         except Exception as e:
             SheetDB._set_error(f"寫入工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
@@ -381,7 +445,7 @@ class SheetDB:
         try:
             row = {col: record.get(col, "") for col in columns}
             ws.append_row([SheetDB.to_sheet_value(row.get(col, "")) for col in columns])
-            SheetDB.bump_cache_version()
+            SheetDB.bump_cache_version(name)
             return True
         except Exception as e:
             SheetDB._set_error(f"追加工作表 {name} 失敗：{type(e).__name__}: {e}\n{traceback.format_exc()}")
