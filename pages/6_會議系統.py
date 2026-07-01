@@ -2,7 +2,7 @@ import streamlit as st
 from datetime import date
 from utils import AppInitializer, StreamFlowEngine, ViewComponents, TaskService # 根據該頁面需求 import
 from utils import MeetingService  # <--- 關鍵：補上這行
-AppInitializer.setup()
+AppInitializer.setup(load_tasks=False, load_meetings=True)
 
 st.header("📅 會議管理系統")
 
@@ -15,17 +15,18 @@ with st.expander("➕ 登記新會議", expanded=True):
         m_notes = st.text_area("紀要")
 
         if st.form_submit_button("登記會議") and m_title:
-            st.session_state.meetings.append({
-                "id": len(st.session_state.meetings) + 1,
-                "title": m_title,
-                "time": m_time,
-                "attendees": m_attendees,
-                "link": m_link,
-                "notes": m_notes,
-                "owner": st.session_state.current_user
-            })
-            st.success("會議已成功建立！")
-            st.rerun()
+            try:
+                MeetingService.add_meeting({
+                    "title": m_title,
+                    "time": m_time,
+                    "attendees": m_attendees,
+                    "link": m_link,
+                    "notes": m_notes,
+                }, author=st.session_state.current_user, account="")
+                st.success("會議已成功建立並寫入 Google Sheet！")
+                st.rerun()
+            except Exception as e:
+                st.error(f"會議寫入失敗：{e}")
 
 st.divider()
 
