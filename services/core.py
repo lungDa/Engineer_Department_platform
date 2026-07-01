@@ -2,6 +2,7 @@ import base64
 import json
 from datetime import date, datetime, timedelta
 from typing import Any
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -63,7 +64,22 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V3.5 Enterprise UI"
+    VERSION = "V3.7 Enterprise Theme V1"
+
+    @staticmethod
+    def load_enterprise_theme():
+        """Inject one shared enterprise theme across all Streamlit pages.
+
+        Streamlit reruns rebuild the DOM, so the CSS must be injected on every run.
+        """
+        root = Path(__file__).resolve().parent.parent
+        css_path = root / "assets" / "enterprise_theme_v1.css"
+        try:
+            css = css_path.read_text(encoding="utf-8")
+            st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+        except Exception:
+            # Theme loading must never block the business system.
+            pass
 
     @staticmethod
     def setup(load_tasks: bool = True, load_meetings: bool = False, load_approvals: bool = False):
@@ -76,6 +92,7 @@ class AppInitializer:
         - 已載入資料會放在 session_state，Google Sheet 讀取由 SheetDB 分層快取控管。
         """
         st.session_state.setdefault("app_version", AppInitializer.VERSION)
+        AppInitializer.load_enterprise_theme()
         st.session_state.setdefault("user_records_fallback", UserService.default_users())
         st.session_state.setdefault("announcements_fallback", [])
         st.session_state.setdefault("tasks_fallback", TaskService.default_tasks())
