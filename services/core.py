@@ -63,7 +63,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V1.7.1 Enterprise Turbo Edition"
+    VERSION = "V3.5 Enterprise UI"
 
     @staticmethod
     def setup(load_tasks: bool = True, load_meetings: bool = False, load_approvals: bool = False):
