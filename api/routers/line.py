@@ -39,11 +39,11 @@ async def line_webhook(
 
     try:
         payload = json.loads(body.decode("utf-8"))
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid JSON payload.",
-            )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid JSON payload.",
+        )
 
     text_events = line_service.extract_text_events(payload)
     replies = []
