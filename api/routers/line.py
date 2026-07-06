@@ -1,6 +1,13 @@
 import json
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    status,
+)
 
 from api.dependencies.services import get_line_command_service, get_line_service
 
@@ -25,18 +32,18 @@ async def line_webhook(
     body = await request.body()
 
     if not line_service.validate_signature(body, x_line_signature):
-        return {
-            "ok": False,
-            "message": "Invalid LINE signature.",
-        }
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid LINE signature.",
+        )
 
     try:
         payload = json.loads(body.decode("utf-8"))
-    except Exception:
-        return {
-            "ok": False,
-            "message": "Invalid JSON payload.",
-        }
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid JSON payload.",
+            )
 
     text_events = line_service.extract_text_events(payload)
     replies = []
