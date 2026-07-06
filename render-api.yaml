@@ -8,4 +8,4 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: APP_VERSION
-        value: V5.0.2 Enterprise Service Layer
+        value: V5.0.3 API Layer
