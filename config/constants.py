@@ -1,7 +1,7 @@
-# V5.0.2 Enterprise Service Layer constants
+# V5.1.0 LINE Smart Assistant constants
 
 APP_TITLE = "開發工程部平台"
-APP_VERSION = "V5.0.4 Repository Layer"
+APP_VERSION = "V5.1.0 LINE Smart Assistant"
 
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
 DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M"

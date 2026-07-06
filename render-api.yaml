@@ -8,4 +8,4 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: APP_VERSION
-        value: V5.0.4 Repository Layer
+        value: V5.1.0 LINE Smart Assistant
