@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: engineer-department-platform
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run streamlit_app.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: APP_VERSION
+        value: V5.0.1 Enterprise Foundation
