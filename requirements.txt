@@ -5,3 +5,8 @@ gspread>=6.0.0
 google-auth>=2.0.0
 openpyxl>=3.1.0
 python-dateutil>=2.9.0
+fastapi
+uvicorn[standard]
+python-dotenv
+line-bot-sdk
+requests
