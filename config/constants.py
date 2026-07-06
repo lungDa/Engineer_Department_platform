@@ -1,0 +1,23 @@
+# V5.0.2 Enterprise Service Layer constants
+
+APP_TITLE = "開發工程部平台"
+APP_VERSION = "V5.0.2 Enterprise Service Layer"
+
+DEFAULT_DATE_FORMAT = "%Y-%m-%d"
+DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M"
+
+WORKSHEET_USERS = "Users"
+WORKSHEET_TASKS = "Tasks"
+WORKSHEET_CATEGORIES = "Categories"
+WORKSHEET_TAGS = "Tags"
+WORKSHEET_ANNOUNCEMENTS = "Announcements"
+WORKSHEET_MEETINGS = "Meetings"
+WORKSHEET_APPROVALS = "Approvals"
+
+STATUS_ACTIVE = "Active"
+STATUS_COMPLETED = "Completed"
+STATUS_CANCELLED = "Cancelled"
+
+PRIORITY_HIGH = "高"
+PRIORITY_MEDIUM = "中"
+PRIORITY_LOW = "低"
