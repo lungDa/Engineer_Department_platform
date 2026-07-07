@@ -1,89 +1,78 @@
 
 # 🚀 Engineer Department Platform
 
-> Enterprise Engineering Management Platform built with **Streamlit + FastAPI + Google Sheets + LINE Official Account**
+> Enterprise Engineering Management Platform
 
 ![Version](https://img.shields.io/badge/version-V5.1.1-blue)
-![Python](https://img.shields.io/badge/Python-3.11+-green)
+![Python](https://img.shields.io/badge/Python-3.11-green)
 ![Streamlit](https://img.shields.io/badge/Streamlit-UI-red)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)
-![Google Sheets](https://img.shields.io/badge/Google%20Sheets-Data-success)
-![LINE](https://img.shields.io/badge/LINE-Official%20Account-00B900)
+![Render](https://img.shields.io/badge/Render-Cloud-purple)
+![LINE](https://img.shields.io/badge/LINE-Official%20Account-00C300)
 
 ---
 
-## 📌 Project Overview
+# Project Overview
 
-Engineer Department Platform 是一套企業內部工程管理平台。
+Engineer Department Platform 是一套以 **Streamlit + FastAPI + Google Sheet** 為核心的企業級工程管理平台。
 
-目前整合：
+目前版本：
 
-- Streamlit Enterprise Dashboard
-- FastAPI API Service
-- Google Sheet Database
-- LINE Official Account
-- Repository Pattern
-- Enterprise Diagnostics Center
+**V5.1.1 Enterprise Diagnostics Center**
 
----
+## 已完成功能
 
-# ✨ Current Features
-
-## 任務管理
-
-- 任務看板
-- 任務搜尋
-- 指派
-- 優先級
-- 到期提醒
-- KPI
-
-## 專案管理
-
+- Dashboard
+- 任務管理
 - 艾森豪矩陣
 - 甘特圖
 - 行事曆
-
-## 協作
-
-- 公告系統
-- 會議系統
-- 簽核中心
-
-## Platform
-
+- 公告中心
 - Google Sheet 同步
-- FastAPI
-- Repository Layer
+- FastAPI API
+- LINE Official Account
 - Enterprise Diagnostics
-- LINE Smart Assistant
 
 ---
 
-# 🏗 Architecture
+# System Architecture
 
 ```text
-GitHub
-    │
-Render
- ┌──┴────────────┐
- │               │
-Streamlit     FastAPI
- │               │
- └──────┬────────┘
-        │
- Service Layer
-        │
- Repository Layer
-        │
- Google Sheet
-        │
- LINE Official Account
+                GitHub
+                   │
+             Render Deploy
+        ┌──────────┴──────────┐
+        │                     │
+   Streamlit UI          FastAPI API
+        │                     │
+        └──────────┬──────────┘
+                   │
+            Service Layer
+                   │
+          Repository Layer
+                   │
+             Google Sheet
+                   │
+        LINE Official Account
+```
+
+## Mermaid
+
+```mermaid
+flowchart TD
+A[GitHub] --> B[Render]
+B --> C[Streamlit]
+B --> D[FastAPI]
+C --> E[Service Layer]
+D --> E
+E --> F[Repository Layer]
+F --> G[Google Sheet]
+D --> H[LINE Official Account]
 ```
 
 ---
 
-# 📁 Project Structure
+# Project Structure
 
 ```text
 app.py
@@ -91,77 +80,72 @@ pages/
 api/
 repositories/
 services/
+components/
 config/
 shared/
-components/
-assets/
 utils/
+assets/
+
 render-api.yaml
 render-streamlit.yaml
+requirements.txt
+README.md
 ```
 
 ---
 
-# ⚙ Environment Variables
+# Quick Start
+
+```bash
+git clone https://github.com/<your-account>/Engineer_Department_platform.git
+cd Engineer_Department_platform
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+API
+
+```bash
+uvicorn api.main:app --reload
+```
+
+---
+
+# Render Deployment
+
+兩個 Render Service：
+
+| Service | Purpose |
+|---------|---------|
+| engineer-department-platform | Streamlit UI |
+| engineer-department-api | FastAPI API |
+
+---
+
+# Environment Variables
 
 ```env
-APP_NAME
-APP_VERSION
-ENVIRONMENT
+APP_NAME=
+APP_VERSION=
+ENVIRONMENT=
 
-STREAMLIT_BASE_URL
-API_BASE_URL
+STREAMLIT_BASE_URL=
+API_BASE_URL=
 
-GOOGLE_SHEET_ID
-GOOGLE_SERVICE_ACCOUNT_JSON
+GOOGLE_SHEET_ID=
+GOOGLE_SERVICE_ACCOUNT_JSON=
 
-LINE_CHANNEL_SECRET
-LINE_CHANNEL_ACCESS_TOKEN
+LINE_CHANNEL_SECRET=
+LINE_CHANNEL_ACCESS_TOKEN=
 
-OPENAI_API_KEY
+OPENAI_API_KEY=
 ```
 
 ---
 
-# 📡 API
+# Google Sheet
 
-## Health
-
-GET /health
-
-GET /ready
-
-## Tasks
-
-GET /api/tasks
-
-GET /api/tasks/active
-
-GET /api/tasks/completed
-
-GET /api/tasks/{id}
-
-## Users
-
-GET /api/users
-
-## Announcement
-
-GET /api/announcements
-
-## LINE
-
-GET /api/line/status
-
-POST /api/line/webhook
-
-POST /api/line/webhook-test
-
----
-
-# 📋 Google Sheet
-
-Worksheets
+需要建立：
 
 - Users
 - Tasks
@@ -173,63 +157,47 @@ Worksheets
 
 ---
 
-# 🤖 LINE Official Account
+# API
 
-Current Commands
-
-- 說明
-- 狀態
-- 我的任務
-- 公告
-
-Webhook
-
-/api/line/webhook
+| Method | Endpoint |
+|---------|----------|
+| GET | /health |
+| GET | /ready |
+| GET | /api/tasks |
+| GET | /api/users |
+| GET | /api/announcements |
+| GET | /api/line/status |
+| POST | /api/line/webhook |
+| POST | /api/line/webhook-test |
 
 ---
 
-# 🛠 Enterprise Diagnostics
+# Enterprise Diagnostics
 
-Developer Mode
+Developer Mode 可檢查：
 
-- Google Sheet Status
-- LINE Status
+- Google Sheet
+- LINE Official Account
 - Render API
-- AI Status
-- System Score
+- AI Service
 
 ---
 
-# 🚀 Deployment
-
-## Streamlit
-
-render-streamlit.yaml
-
-## API
-
-render-api.yaml
-
----
-
-# 🗺 Roadmap
+# Roadmap
 
 | Version | Status |
 |----------|--------|
-| V5.0 Foundation | ✅ |
-| V5.0 Service Layer | ✅ |
-| V5.0 API Layer | ✅ |
-| V5.0 Repository | ✅ |
-| V5.1 LINE Smart Assistant | ✅ |
-| V5.1 Enterprise Diagnostics | ✅ |
-| V5.1.2 LINE User Binding | 🚧 |
-| V5.2 AI Assistant | 🚧 |
-| V5.3 Gmail / Calendar | 🚧 |
-| V5.4 Scheduler | 🚧 |
-| V6 Database Migration | 📅 |
+| V5.1.1 Enterprise Diagnostics | ✅ |
+| V5.1.2 LINE User Binding | Planned |
+| V5.2 AI Assistant | Planned |
+| V5.3 Gmail & Calendar | Planned |
+| V5.4 Scheduler | Planned |
+| V6 Database Migration | Planned |
 
 ---
 
-# 📄 License
+# License
 
-Internal Enterprise Project
+MIT License
+
+Copyright (c) Engineer Department Platform
