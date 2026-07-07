@@ -1,72 +1,235 @@
-#  專業任務管理系統
 
-這是一套以 Streamlit 製作的專案管理平台，包含任務看板、艾森豪矩陣、專案行事曆、甘特圖、效率分析、會議系統與簽核中心。
+# 🚀 Engineer Department Platform
 
-## 功能
+> Enterprise Engineering Management Platform built with **Streamlit + FastAPI + Google Sheets + LINE Official Account**
 
-- 任務看板：分類欄位、進度、工時、備註、活動紀錄
-- 艾森豪矩陣：依重要度與緊急度分類任務
-- 專案行事曆：月曆式查看任務與會議
-- 甘特圖：Plotly 視覺化專案排程
-- 效率分析：任務狀態、逾期項目、團隊負載
-- 會議系統：建立會議、紀要與權限檢視
-- 簽核中心：發起、同意、駁回、轉交簽核
+![Version](https://img.shields.io/badge/version-V5.1.1-blue)
+![Python](https://img.shields.io/badge/Python-3.11+-green)
+![Streamlit](https://img.shields.io/badge/Streamlit-UI-red)
+![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)
+![Google Sheets](https://img.shields.io/badge/Google%20Sheets-Data-success)
+![LINE](https://img.shields.io/badge/LINE-Official%20Account-00B900)
 
-## 本機執行
+---
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-streamlit run app.py
+## 📌 Project Overview
+
+Engineer Department Platform 是一套企業內部工程管理平台。
+
+目前整合：
+
+- Streamlit Enterprise Dashboard
+- FastAPI API Service
+- Google Sheet Database
+- LINE Official Account
+- Repository Pattern
+- Enterprise Diagnostics Center
+
+---
+
+# ✨ Current Features
+
+## 任務管理
+
+- 任務看板
+- 任務搜尋
+- 指派
+- 優先級
+- 到期提醒
+- KPI
+
+## 專案管理
+
+- 艾森豪矩陣
+- 甘特圖
+- 行事曆
+
+## 協作
+
+- 公告系統
+- 會議系統
+- 簽核中心
+
+## Platform
+
+- Google Sheet 同步
+- FastAPI
+- Repository Layer
+- Enterprise Diagnostics
+- LINE Smart Assistant
+
+---
+
+# 🏗 Architecture
+
+```text
+GitHub
+    │
+Render
+ ┌──┴────────────┐
+ │               │
+Streamlit     FastAPI
+ │               │
+ └──────┬────────┘
+        │
+ Service Layer
+        │
+ Repository Layer
+        │
+ Google Sheet
+        │
+ LINE Official Account
 ```
 
-macOS / Linux：
+---
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-## 部署到 Streamlit Community Cloud
-
-1. 將此資料夾內容推上 GitHub。
-2. 到 Streamlit Community Cloud 建立 App。
-3. Repository 選擇你的 GitHub 專案。
-4. Main file path 填入：
+# 📁 Project Structure
 
 ```text
 app.py
+pages/
+api/
+repositories/
+services/
+config/
+shared/
+components/
+assets/
+utils/
+render-api.yaml
+render-streamlit.yaml
 ```
 
-5. Deploy。
+---
 
-## 專案結構
+# ⚙ Environment Variables
 
-```text
-StreamFlow_GitHub/
-├── app.py
-├── utils.py
-├── requirements.txt
-├── README.md
-├── .gitignore
-├── .streamlit/
-│   ├── config.toml
-│   └── secrets.example.toml
-└── pages/
-    ├── 1_任務看板.py
-    ├── 2_艾森豪矩陣.py
-    ├── 3_專案行事曆.py
-    ├── 4_專案甘特圖.py
-    ├── 5_效率統計分析.py
-    ├── 6_會議系統.py
-    └── 7_簽核中心.py
+```env
+APP_NAME
+APP_VERSION
+ENVIRONMENT
+
+STREAMLIT_BASE_URL
+API_BASE_URL
+
+GOOGLE_SHEET_ID
+GOOGLE_SERVICE_ACCOUNT_JSON
+
+LINE_CHANNEL_SECRET
+LINE_CHANNEL_ACCESS_TOKEN
+
+OPENAI_API_KEY
 ```
 
-## 注意事項
+---
 
-- `.streamlit/secrets.toml` 不可上傳 GitHub。
-- 目前版本使用 `st.session_state` 暫存資料，重新整理或重啟後會回到預設資料。
-- 若要正式多人使用，建議下一版串接 Google Sheet、PostgreSQL 或 Supabase。
+# 📡 API
+
+## Health
+
+GET /health
+
+GET /ready
+
+## Tasks
+
+GET /api/tasks
+
+GET /api/tasks/active
+
+GET /api/tasks/completed
+
+GET /api/tasks/{id}
+
+## Users
+
+GET /api/users
+
+## Announcement
+
+GET /api/announcements
+
+## LINE
+
+GET /api/line/status
+
+POST /api/line/webhook
+
+POST /api/line/webhook-test
+
+---
+
+# 📋 Google Sheet
+
+Worksheets
+
+- Users
+- Tasks
+- Announcements
+- Meetings
+- Approvals
+- Categories
+- Tags
+
+---
+
+# 🤖 LINE Official Account
+
+Current Commands
+
+- 說明
+- 狀態
+- 我的任務
+- 公告
+
+Webhook
+
+/api/line/webhook
+
+---
+
+# 🛠 Enterprise Diagnostics
+
+Developer Mode
+
+- Google Sheet Status
+- LINE Status
+- Render API
+- AI Status
+- System Score
+
+---
+
+# 🚀 Deployment
+
+## Streamlit
+
+render-streamlit.yaml
+
+## API
+
+render-api.yaml
+
+---
+
+# 🗺 Roadmap
+
+| Version | Status |
+|----------|--------|
+| V5.0 Foundation | ✅ |
+| V5.0 Service Layer | ✅ |
+| V5.0 API Layer | ✅ |
+| V5.0 Repository | ✅ |
+| V5.1 LINE Smart Assistant | ✅ |
+| V5.1 Enterprise Diagnostics | ✅ |
+| V5.1.2 LINE User Binding | 🚧 |
+| V5.2 AI Assistant | 🚧 |
+| V5.3 Gmail / Calendar | 🚧 |
+| V5.4 Scheduler | 🚧 |
+| V6 Database Migration | 📅 |
+
+---
+
+# 📄 License
+
+Internal Enterprise Project
