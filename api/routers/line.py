@@ -40,15 +40,10 @@ async def line_webhook(
     line_service=Depends(get_line_service),
     line_command_service=Depends(get_line_command_service),
 ):
-    """
-    LINE Official Account Webhook
-    """
+    """LINE Official Account Webhook"""
 
     body = await request.body()
 
-    # =====================================================
-    # Signature 驗證
-    # =====================================================
     if not line_service.validate_signature(
         body,
         x_line_signature,
@@ -58,32 +53,18 @@ async def line_webhook(
             detail="Invalid LINE signature.",
         )
 
-    # =====================================================
-    # JSON 解析
-    # =====================================================
     try:
         payload = json.loads(body.decode("utf-8"))
-
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid JSON payload.",
         )
 
-    # =====================================================
-    # 取得文字事件
-    # =====================================================
-    text_events = line_service.extract_text_events(
-        payload
-    )
-
+    text_events = line_service.extract_text_events(payload)
     replies = []
 
-    # =====================================================
-    # 回覆訊息
-    # =====================================================
     for event in text_events:
-
         reply_text = line_command_service.handle_text(
             text=event.get("text", ""),
             user_id=event.get("user_id"),
@@ -114,32 +95,15 @@ async def line_webhook(
 @router.post("/webhook-test")
 async def line_webhook_test(
     request: Request,
-    line_command_service=Depends(
-        get_line_command_service
-    ),
+    line_command_service=Depends(get_line_command_service),
 ):
-    """
-    Local test endpoint
-
-    Example
-
-    {
-        "text": "我的任務",
-        "user_id": "test-user"
-    }
-    """
+    """Local/manual test endpoint without LINE signature."""
 
     payload = await request.json()
-
     text = payload.get("text", "")
     user_id = payload.get("user_id")
 
-    reply = line_command_service.handle_text(
-        text=text,
-        user_id=user_id,
-    )
-
     return {
         "ok": True,
-        "reply": reply,
+        "reply": line_command_service.handle_text(text=text, user_id=user_id),
     }

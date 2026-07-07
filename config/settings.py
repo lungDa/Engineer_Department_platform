@@ -18,7 +18,7 @@ if load_dotenv:
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Engineer Department Platform")
-    app_version: str = os.getenv("APP_VERSION", "V5.1.0 LINE Smart Assistant")
+    app_version: str = os.getenv("APP_VERSION", "V5.1.1 Enterprise Diagnostics Center")
     environment: str = os.getenv("ENVIRONMENT", "development")
 
     streamlit_base_url: str = os.getenv("STREAMLIT_BASE_URL", "")

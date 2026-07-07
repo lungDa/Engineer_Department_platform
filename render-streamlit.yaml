@@ -8,4 +8,4 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: APP_VERSION
-        value: V5.1.0 LINE Smart Assistant
+        value: V5.1.1 Enterprise Diagnostics Center

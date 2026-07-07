@@ -1,7 +1,7 @@
-# V5.1.0 LINE Smart Assistant constants
+# V5.1.1 Enterprise Diagnostics Center constants
 
 APP_TITLE = "開發工程部平台"
-APP_VERSION = "V5.1.0 LINE Smart Assistant"
+APP_VERSION = "V5.1.1 Enterprise Diagnostics Center"
 
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
 DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M"
