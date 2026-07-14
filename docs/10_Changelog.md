@@ -1,5 +1,11 @@
 # 10 Changelog
 
+## V5.3.3 Personnel Permission Gate
+- 人員名單預設為唯讀
+- 僅在首頁完成開發者密碼驗證後開放人員新增、修改、停用與刪除
+- 修改人員時可調整姓名、課別、角色、權限、啟用狀態與密碼
+- 登出開發者模式後立即恢復唯讀
+
 ## V5.3.2 Department Personnel Directory
 - 新增 pages/8_人員名單.py
 - 人員名單依 11 個課別分組顯示

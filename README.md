@@ -3,7 +3,7 @@
 
 > Enterprise Engineering Management Platform
 
-![Version](https://img.shields.io/badge/version-V5.3.2-blue)
+![Version](https://img.shields.io/badge/version-V5.3.3-blue)
 ![Python](https://img.shields.io/badge/Python-3.11-green)
 ![Streamlit](https://img.shields.io/badge/Streamlit-UI-red)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)

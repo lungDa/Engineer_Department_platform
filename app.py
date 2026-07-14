@@ -160,7 +160,7 @@ if st.session_state.get("show_developer_panel", False):
                     type="password",
                     help="請在 Google Sheet 的 Users 工作表建立開發者帳號，role 設為「開發者」或 role_level 設為 9 以上。",
                 )
-                submitted = st.form_submit_button("顯示系統連線診斷")
+                submitted = st.form_submit_button("進入開發者模式")
                 if submitted:
                     ok, msg = UserService.verify_developer_password(developer_password)
                     if ok:
@@ -172,9 +172,9 @@ if st.session_state.get("show_developer_panel", False):
         else:
             col_a, col_b = st.columns([3, 1])
             with col_a:
-                st.success("開發者診斷模式已啟用。")
+                st.success("開發者模式已啟用；人員名單頁已開放新增與修改功能。")
             with col_b:
-                if st.button("登出診斷", width="stretch"):
+                if st.button("登出開發者模式", width="stretch"):
                     st.session_state["developer_diagnostics_unlocked"] = False
                     st.session_state["show_developer_panel"] = False
                     st.rerun()
