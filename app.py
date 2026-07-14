@@ -187,6 +187,7 @@ if st.session_state.get("show_developer_panel", False):
                 if users:
                     st.dataframe(
                         [{
+                            "課別": u.get("department") or "儀電規劃課",
                             "姓名": u.get("name", ""), "帳號": u.get("account", ""),
                             "角色": u.get("role", ""), "權限等級": u.get("role_level", 0),
                             "啟用": u.get("active", "TRUE"),
@@ -195,6 +196,17 @@ if st.session_state.get("show_developer_panel", False):
                     )
                 else:
                     st.info("此課別尚無人員。")
+
+                with st.expander("📊 全課別人數總覽", expanded=False):
+                    department_counts = [
+                        {
+                            "課別": department,
+                            "啟用人數": len(UserService.get_users_by_department(department)),
+                            "全部人數（含停用）": len(UserService.get_users_by_department(department, active_only=False)),
+                        }
+                        for department in DEPARTMENTS
+                    ]
+                    st.dataframe(department_counts, width="stretch", hide_index=True)
 
                 with st.expander("➕ 新增或調整人員", expanded=not users):
                     with st.form("developer_user_editor"):

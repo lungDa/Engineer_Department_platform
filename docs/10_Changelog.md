@@ -1,5 +1,11 @@
 # 10 Changelog
 
+## V5.3.2 Department Personnel Directory
+- 新增 pages/8_人員名單.py
+- 人員名單依 11 個課別分組顯示
+- 支援姓名、帳號與角色搜尋
+- 開發者面板新增課別欄位及全課別人數總覽
+
 ## V5.3.1 Import Hotfix
 - 將 DEPARTMENTS 移至獨立 config/departments.py
 - 修正 Streamlit Cloud 部署時 utils 相容層版本不同步造成的 ImportError

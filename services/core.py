@@ -74,7 +74,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V5.3.0 Department Edition"
+    VERSION = "V5.3.2 Department Personnel Directory"
 
     @staticmethod
     def load_enterprise_theme():
