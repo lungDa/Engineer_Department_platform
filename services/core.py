@@ -8,12 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from services.sheet_db import SheetDB
-
-DEPARTMENTS = [
-    "儀電規劃課", "程序規劃課", "品質安全課", "維護技術服務課",
-    "工程一課", "工程二課", "工程三課", "工程專案一課",
-    "工程專案二課", "工程專案三課", "管理師",
-]
+from config.departments import DEPARTMENTS
 
 
 def current_department() -> str:

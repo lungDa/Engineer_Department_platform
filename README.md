@@ -3,7 +3,7 @@
 
 > Enterprise Engineering Management Platform
 
-![Version](https://img.shields.io/badge/version-V5.1.1-blue)
+![Version](https://img.shields.io/badge/version-V5.3.0-blue)
 ![Python](https://img.shields.io/badge/Python-3.11-green)
 ![Streamlit](https://img.shields.io/badge/Streamlit-UI-red)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)
@@ -15,6 +15,8 @@
 # Project Overview
 
 Engineer Department Platform 是一套以 **Streamlit + FastAPI + Google Sheet** 為核心的企業級工程管理平台。
+
+V5.3.0 新增 11 個工程課別。側邊欄先選擇課別後，任務、行事曆、甘特圖、效率分析、會議、簽核與公告均只顯示該課別資料；人員指派選單也只載入該課別成員。開發者面板可新增、刪除、停用人員及調整角色權限。
 
 目前版本：
 

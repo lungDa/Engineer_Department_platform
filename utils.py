@@ -17,7 +17,7 @@ from services.core import (
     parse_float,
     parse_int,
     parse_json_list,
-    DEPARTMENTS,
     current_department,
 )
+from config.departments import DEPARTMENTS
 from components.view import ViewComponents, StreamFlowEngine

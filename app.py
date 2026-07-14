@@ -1,7 +1,8 @@
 import streamlit as st
 
 from services.diagnostics_service import DiagnosticsService
-from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDB, DEPARTMENTS
+from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDB
+from config.departments import DEPARTMENTS
 from config.roles import ROLE_LEVELS
 
 st.set_page_config(page_title="鋒霈 工程部 專業系統", layout="wide")

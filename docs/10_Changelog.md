@@ -1,5 +1,9 @@
 # 10 Changelog
 
+## V5.3.1 Import Hotfix
+- 將 DEPARTMENTS 移至獨立 config/departments.py
+- 修正 Streamlit Cloud 部署時 utils 相容層版本不同步造成的 ImportError
+
 ## V5.3.0 Department Edition
 - 11 課別全平台切換與資料隔離
 - Users、Tasks、Announcements、Meetings、Approvals 新增 department 欄位
