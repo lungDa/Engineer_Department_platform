@@ -51,7 +51,10 @@ else:
                 else:
                     st.error(message)
 
-all_users = UserService.get_active_users()
+all_users = [
+    user for user in UserService.get_active_users()
+    if str(user.get("department") or "") != "系統獨立"
+]
 keyword = st.text_input("🔍 搜尋人員", placeholder="輸入姓名、帳號或角色")
 
 summary_cols = st.columns(4)

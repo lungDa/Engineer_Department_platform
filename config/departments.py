@@ -13,3 +13,6 @@ DEPARTMENTS = [
     "工程專案三課",
     "管理師",
 ]
+
+# 開發者為系統獨立帳號，不屬於任何業務課別。
+INDEPENDENT_DEPARTMENT = "系統獨立"

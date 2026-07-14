@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from services.sheet_db import SheetDB
-from config.departments import DEPARTMENTS
+from config.departments import DEPARTMENTS, INDEPENDENT_DEPARTMENT
 
 
 def current_department() -> str:
@@ -17,6 +17,11 @@ def current_department() -> str:
 
 def record_department(row: dict[str, Any]) -> str:
     """舊資料沒有 department 時歸入第一課，確保升級後仍可看到。"""
+    account = str(row.get("account", "")).strip().lower()
+    role = str(row.get("role", "")).strip()
+    role_level = parse_int(row.get("role_level", 0), 0) if "parse_int" in globals() else 0
+    if account in {"developer", "dev", "admin"} or role == "開發者" or role_level >= 9:
+        return INDEPENDENT_DEPARTMENT
     return str(row.get("department") or DEPARTMENTS[0]).strip()
 
 def now_text():
@@ -74,7 +79,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V5.5.2 Split Announcement Permissions"
+    VERSION = "V5.5.3 Independent Developer Account"
 
     @staticmethod
     def load_enterprise_theme():
@@ -124,7 +129,7 @@ class AppInitializer:
             key="current_department",
             help="各功能、任務、人員、會議與簽核資料會依此課別獨立顯示。",
         )
-        users = [u for u in users if record_department(u) == current_department()]
+        users = [u for u in users if UserService.has_department(u, current_department())]
         partners = []
         seen = set()
         for user in users:
@@ -164,10 +169,7 @@ class UserService:
     def default_users():
         now = now_text()
         return [
-            {"id": 1, "name": "開發者", "account": "developer", "password": UserService.DEFAULT_PASSWORD, "role": "開發者", "role_level": 9, "active": "TRUE", "department": "儀電規劃課", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
-            {"id": 2, "name": "王大明", "account": "wang", "password": UserService.DEFAULT_PASSWORD, "role": "工程師", "role_level": 1, "active": "TRUE", "department": "儀電規劃課", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
-            {"id": 3, "name": "陳小華", "account": "chen", "password": UserService.DEFAULT_PASSWORD, "role": "助理工程師", "role_level": 0, "active": "TRUE", "department": "儀電規劃課", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
-            {"id": 4, "name": "林志玲", "account": "lin", "password": UserService.DEFAULT_PASSWORD, "role": "助理工程師", "role_level": 0, "active": "TRUE", "department": "儀電規劃課", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 1, "name": "開發者", "account": "developer", "password": UserService.DEFAULT_PASSWORD, "role": "開發者", "role_level": 9, "active": "TRUE", "department": INDEPENDENT_DEPARTMENT, "assignments": "[]", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
         ]
 
     @staticmethod
@@ -229,6 +231,8 @@ class UserService:
 
     @staticmethod
     def has_department(user: dict | None, department: str) -> bool:
+        if record_department(user or {}) == INDEPENDENT_DEPARTMENT:
+            return False
         return any(item.get("department") == department for item in UserService.get_assignments(user))
 
     @staticmethod
