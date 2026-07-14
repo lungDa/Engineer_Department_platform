@@ -1,7 +1,8 @@
 import streamlit as st
 
 from services.diagnostics_service import DiagnosticsService
-from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDB
+from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDB, DEPARTMENTS
+from config.roles import ROLE_LEVELS
 
 st.set_page_config(page_title="鋒霈 工程部 專業系統", layout="wide")
 
@@ -10,7 +11,7 @@ ViewComponents.render_public_sidebar()
 
 title_col, dev_col = st.columns([8, 1])
 with title_col:
-    st.title("🚀 歡迎使用 鋒霈 工程一部 專業任務管理系統")
+    st.title("🚀 歡迎使用 鋒霈 工程部 專業任務管理系統")
 with dev_col:
     st.write("")
     if st.button("🛠️ 開發者", width="stretch"):
@@ -177,7 +178,58 @@ if st.session_state.get("show_developer_panel", False):
                     st.session_state["show_developer_panel"] = False
                     st.rerun()
 
-            render_enterprise_diagnostics()
+            management_tab, diagnostics_tab = st.tabs(["👥 人員與權限管理", "🩺 系統診斷"])
+            with management_tab:
+                st.caption("人員依課別分組；任務、會議與簽核的人名選單只顯示目前課別成員。")
+                selected_department = st.selectbox("管理課別", DEPARTMENTS, key="developer_manage_department")
+                users = UserService.get_users_by_department(selected_department, active_only=False)
+                if users:
+                    st.dataframe(
+                        [{
+                            "姓名": u.get("name", ""), "帳號": u.get("account", ""),
+                            "角色": u.get("role", ""), "權限等級": u.get("role_level", 0),
+                            "啟用": u.get("active", "TRUE"),
+                        } for u in users],
+                        width="stretch", hide_index=True,
+                    )
+                else:
+                    st.info("此課別尚無人員。")
+
+                with st.expander("➕ 新增或調整人員", expanded=not users):
+                    with st.form("developer_user_editor"):
+                        name = st.text_input("姓名")
+                        account = st.text_input("帳號（既有帳號會更新資料）")
+                        role = st.selectbox("角色／權限", list(ROLE_LEVELS.keys()), index=1)
+                        active = st.checkbox("啟用帳號", value=True)
+                        direct_password = st.text_input("設定密碼（新增時空白為 0000）", type="password")
+                        if st.form_submit_button("儲存人員", width="stretch"):
+                            if not name.strip() or not account.strip():
+                                st.error("姓名與帳號為必填。")
+                            else:
+                                result = UserService.upsert_user(
+                                    name=name, account=account, role=role,
+                                    role_level=ROLE_LEVELS[role], active=active,
+                                    direct_password=direct_password,
+                                    department=selected_department,
+                                )
+                                st.success("人員已新增。" if result == "created" else "人員資料與權限已更新。")
+                                st.rerun()
+
+                with st.expander("🗑️ 刪除人員"):
+                    deletable = {f"{u.get('name')}（{u.get('account')}）": u.get("account") for u in users}
+                    if deletable:
+                        target_label = st.selectbox("選擇人員", list(deletable.keys()))
+                        confirm = st.checkbox("我確認要永久刪除此人員")
+                        if st.button("刪除人員", type="primary", disabled=not confirm):
+                            ok, msg = UserService.delete_user(deletable[target_label])
+                            (st.success if ok else st.error)(msg)
+                            if ok:
+                                st.rerun()
+                    else:
+                        st.info("沒有可刪除的人員。")
+
+            with diagnostics_tab:
+                render_enterprise_diagnostics()
 
 ViewComponents.render_announcement_board()
 

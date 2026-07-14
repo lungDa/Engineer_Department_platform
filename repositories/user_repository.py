@@ -37,6 +37,7 @@ class UserRepository(BaseRepository):
         role: str | None = None,
         account: str | None = None,
         name: str | None = None,
+        department: str | None = None,
     ) -> list[dict]:
         users = self.get_all()
 
@@ -55,6 +56,9 @@ class UserRepository(BaseRepository):
 
         if name:
             users = [user for user in users if name in str(user.get("name", ""))]
+
+        if department:
+            users = [user for user in users if str(user.get("department") or "儀電規劃課") == department]
 
         return users
 

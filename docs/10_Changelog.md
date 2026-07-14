@@ -1,5 +1,12 @@
 # 10 Changelog
 
+## V5.3.0 Department Edition
+- 11 課別全平台切換與資料隔離
+- Users、Tasks、Announcements、Meetings、Approvals 新增 department 欄位
+- 各課別人員名單獨立用於任務、會議與簽核選單
+- 開發者可新增、刪除、停用人員並調整角色權限
+- API 支援 department 查詢參數
+
 ## V5.1.1 Enterprise Diagnostics Center
 - Enterprise Diagnostics
 - LINE Official Account Integration

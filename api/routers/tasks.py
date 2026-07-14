@@ -13,6 +13,7 @@ def list_tasks(
     importance: str | None = Query(default=None, description="Filter by importance"),
     urgency: str | None = Query(default=None, description="Filter by urgency"),
     keyword: str | None = Query(default=None, description="Search title / notes / category / tags"),
+    department: str | None = Query(default=None, description="Filter by department"),
     limit: int = Query(default=50, ge=1, le=500),
     task_service=Depends(get_task_service),
 ):
@@ -23,6 +24,7 @@ def list_tasks(
         importance=importance,
         urgency=urgency,
         keyword=keyword,
+        department=department,
     )
 
     return {

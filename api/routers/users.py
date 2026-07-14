@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.dependencies.services import get_auth_service
 
@@ -6,8 +6,10 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 
 
 @router.get("")
-def list_users(auth_service=Depends(get_auth_service)):
+def list_users(department: str | None = Query(default=None), auth_service=Depends(get_auth_service)):
     users = auth_service.load_users()
+    if department:
+        users = [u for u in users if str(u.get("department") or "儀電規劃課") == department]
     safe_users = []
     for user in users:
         safe = dict(user)
@@ -25,8 +27,10 @@ def list_users(auth_service=Depends(get_auth_service)):
 
 
 @router.get("/active")
-def active_users(auth_service=Depends(get_auth_service)):
+def active_users(department: str | None = Query(default=None), auth_service=Depends(get_auth_service)):
     users = auth_service.get_active_users()
+    if department:
+        users = [u for u in users if str(u.get("department") or "儀電規劃課") == department]
     safe_users = []
     for user in users:
         safe = dict(user)

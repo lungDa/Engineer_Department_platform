@@ -30,6 +30,7 @@ class TaskService(BaseService):
         due_before=None,
         due_after=None,
         keyword: str | None = None,
+        department: str | None = None,
     ) -> list[dict]:
         return task_repository.query(
             status=status,
@@ -40,6 +41,7 @@ class TaskService(BaseService):
             due_before=due_before,
             due_after=due_after,
             keyword=keyword,
+            department=department,
         )
 
     def get_by_id(self, task_id: int | str) -> dict | None:

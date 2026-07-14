@@ -9,6 +9,21 @@ import streamlit as st
 
 from services.sheet_db import SheetDB
 
+DEPARTMENTS = [
+    "儀電規劃課", "程序規劃課", "品質安全課", "維護技術服務課",
+    "工程一課", "工程二課", "工程三課", "工程專案一課",
+    "工程專案二課", "工程專案三課", "管理師",
+]
+
+
+def current_department() -> str:
+    return st.session_state.get("current_department", DEPARTMENTS[0])
+
+
+def record_department(row: dict[str, Any]) -> str:
+    """舊資料沒有 department 時歸入第一課，確保升級後仍可看到。"""
+    return str(row.get("department") or DEPARTMENTS[0]).strip()
+
 def now_text():
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -64,7 +79,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V3.7 Enterprise Theme V1"
+    VERSION = "V5.3.0 Department Edition"
 
     @staticmethod
     def load_enterprise_theme():
@@ -105,6 +120,16 @@ class AppInitializer:
         st.session_state.setdefault("approvals", st.session_state.get("approvals_fallback", []))
 
         users = UserService.get_active_users()
+        available_departments = UserService.get_departments() or DEPARTMENTS
+        if st.session_state.get("current_department") not in available_departments:
+            st.session_state.current_department = available_departments[0]
+        st.sidebar.selectbox(
+            "🏢 選擇課別",
+            available_departments,
+            key="current_department",
+            help="各功能、任務、人員、會議與簽核資料會依此課別獨立顯示。",
+        )
+        users = [u for u in users if record_department(u) == current_department()]
         partners = []
         seen = set()
         for user in users:
@@ -119,11 +144,11 @@ class AppInitializer:
         st.session_state.tags_list = TagService.load_names()
 
         if load_tasks:
-            st.session_state.tasks = TaskService.load_all()
+            st.session_state.tasks = TaskService.load_by_department(current_department())
         if load_meetings:
-            st.session_state.meetings = MeetingService.load_all()
+            st.session_state.meetings = MeetingService.load_by_department(current_department())
         if load_approvals:
-            st.session_state.approvals = ApprovalService.load_all()
+            st.session_state.approvals = ApprovalService.load_by_department(current_department())
 
         st.session_state.setdefault("cal_year", date.today().year)
         st.session_state.setdefault("cal_month", date.today().month)
@@ -137,14 +162,14 @@ class UserService:
     DEFAULT_PASSWORD = "0000"
     COLUMNS = [
         "id", "name", "account", "password", "role", "role_level", "active",
-        "must_change_password", "created_at", "updated_at", "last_login_at",
+        "department", "must_change_password", "created_at", "updated_at", "last_login_at",
     ]
 
     @staticmethod
     def default_users():
         now = now_text()
         return [
-            {"id": 1, "name": "闕老師", "account": "admin", "password": UserService.DEFAULT_PASSWORD, "role": "管理員", "role_level": 2, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 1, "name": "開發者", "account": "developer", "password": UserService.DEFAULT_PASSWORD, "role": "開發者", "role_level": 9, "active": "TRUE", "department": "儀電規劃課", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
             {"id": 2, "name": "王大明", "account": "wang", "password": UserService.DEFAULT_PASSWORD, "role": "主管", "role_level": 1, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
             {"id": 3, "name": "陳小華", "account": "chen", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
             {"id": 4, "name": "林志玲", "account": "lin", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
@@ -179,11 +204,23 @@ class UserService:
         names = []
         seen = set()
         for user in UserService.get_active_users():
+            if record_department(user) != current_department():
+                continue
             name = str(user.get("name", "")).strip()
             if name and name not in seen:
                 seen.add(name)
                 names.append(name)
         return sorted(names)
+
+    @staticmethod
+    def get_departments() -> list[str]:
+        configured = {record_department(u) for u in UserService.load_all() if record_department(u)}
+        return [d for d in DEPARTMENTS if d in configured] + [d for d in DEPARTMENTS if d not in configured]
+
+    @staticmethod
+    def get_users_by_department(department: str, active_only: bool = True) -> list[dict]:
+        rows = UserService.get_active_users() if active_only else UserService.load_all()
+        return [u for u in rows if record_department(u) == department]
 
     @staticmethod
     def is_developer_user(user: dict[str, Any] | None) -> bool:
@@ -276,7 +313,7 @@ class UserService:
         return False, "找不到帳號。"
 
     @staticmethod
-    def upsert_user(name, account, role, role_level, active=True, reset_password=False, direct_password=""):
+    def upsert_user(name, account, role, role_level, active=True, reset_password=False, direct_password="", department=None):
         records = UserService.load_all()
         now = now_text()
         target = str(account).strip().lower()
@@ -287,6 +324,7 @@ class UserService:
                 row["role"] = role
                 row["role_level"] = int(role_level)
                 row["active"] = bool_text(active)
+                row["department"] = department or record_department(row)
                 if direct_password:
                     row["password"] = str(direct_password)
                     row["must_change_password"] = "TRUE"
@@ -305,6 +343,7 @@ class UserService:
             "role": role,
             "role_level": int(role_level),
             "active": bool_text(active),
+            "department": department or current_department(),
             "must_change_password": "TRUE",
             "created_at": now,
             "updated_at": now,
@@ -312,6 +351,20 @@ class UserService:
         })
         UserService.save_all(records)
         return "created"
+
+    @staticmethod
+    def delete_user(account: str) -> tuple[bool, str]:
+        target = str(account).strip().lower()
+        records = UserService.load_all()
+        victim = next((r for r in records if str(r.get("account", "")).strip().lower() == target), None)
+        if not victim:
+            return False, "找不到指定人員。"
+        if UserService.is_developer_user(victim):
+            developers = [r for r in records if UserService.is_developer_user(r)]
+            if len(developers) <= 1:
+                return False, "不可刪除系統中最後一位開發者。"
+        UserService.save_all([r for r in records if r is not victim])
+        return True, "人員已刪除。"
 
 
 class CategoryService:
@@ -383,7 +436,7 @@ class TaskService:
     WORKSHEET_NAME = "Tasks"
     COLUMNS = [
         "id", "title", "category", "due", "assignees", "status", "progress", "hours_spent",
-        "importance", "urgency", "tags", "notes", "depends_on", "history", "created_by", "created_account", "created_at", "updated_at",
+        "department", "importance", "urgency", "tags", "notes", "depends_on", "history", "created_by", "created_account", "created_at", "updated_at",
     ]
 
     @staticmethod
@@ -427,6 +480,10 @@ class TaskService:
         return [TaskService._from_sheet(r) for r in rows if r.get("title")]
 
     @staticmethod
+    def load_by_department(department):
+        return [r for r in TaskService.load_all() if record_department(r) == department]
+
+    @staticmethod
     def save_all(records):
         rows = [TaskService._to_sheet(r) for r in records]
         if not SheetDB.save(TaskService.WORKSHEET_NAME, TaskService.COLUMNS, rows):
@@ -443,6 +500,7 @@ class TaskService:
             "created_account": account or task.get("created_account", ""),
             "created_at": now,
             "updated_at": now,
+            "department": task.get("department") or current_department(),
         })
         row = TaskService._to_sheet(task)
         ok = SheetDB.append(TaskService.WORKSHEET_NAME, TaskService.COLUMNS, row)
@@ -487,7 +545,7 @@ class TaskService:
 
 class MeetingService:
     WORKSHEET_NAME = "Meetings"
-    COLUMNS = ["id", "title", "time", "attendees", "link", "notes", "owner", "owner_account", "created_at", "updated_at"]
+    COLUMNS = ["id", "department", "title", "time", "attendees", "link", "notes", "owner", "owner_account", "created_at", "updated_at"]
 
     @staticmethod
     def default_meetings():
@@ -517,6 +575,10 @@ class MeetingService:
         return [MeetingService._from_sheet(r) for r in rows if r.get("title")]
 
     @staticmethod
+    def load_by_department(department):
+        return [r for r in MeetingService.load_all() if record_department(r) == department]
+
+    @staticmethod
     def save_all(records):
         rows = [MeetingService._to_sheet(r) for r in records]
         if not SheetDB.save(MeetingService.WORKSHEET_NAME, MeetingService.COLUMNS, rows):
@@ -533,6 +595,7 @@ class MeetingService:
             "owner_account": account or meeting.get("owner_account", ""),
             "created_at": now,
             "updated_at": now,
+            "department": meeting.get("department") or current_department(),
         })
         row = MeetingService._to_sheet(meeting)
         ok = SheetDB.append(MeetingService.WORKSHEET_NAME, MeetingService.COLUMNS, row)
@@ -555,7 +618,7 @@ class MeetingService:
 
 class ApprovalService:
     WORKSHEET_NAME = "Approvals"
-    COLUMNS = ["id", "type", "content", "sender", "sender_account", "current_signer", "status", "history", "created_at", "updated_at"]
+    COLUMNS = ["id", "department", "type", "content", "sender", "sender_account", "current_signer", "status", "history", "created_at", "updated_at"]
 
     @staticmethod
     def default_approvals():
@@ -583,6 +646,10 @@ class ApprovalService:
         return [ApprovalService._from_sheet(r) for r in rows if r.get("type")]
 
     @staticmethod
+    def load_by_department(department):
+        return [r for r in ApprovalService.load_all() if record_department(r) == department]
+
+    @staticmethod
     def save_all(records):
         rows = [ApprovalService._to_sheet(r) for r in records]
         if not SheetDB.save(ApprovalService.WORKSHEET_NAME, ApprovalService.COLUMNS, rows):
@@ -599,6 +666,7 @@ class ApprovalService:
             "sender_account": account or approval.get("sender_account", ""),
             "created_at": now,
             "updated_at": now,
+            "department": approval.get("department") or current_department(),
         })
         row = ApprovalService._to_sheet(approval)
         ok = SheetDB.append(ApprovalService.WORKSHEET_NAME, ApprovalService.COLUMNS, row)
@@ -634,13 +702,18 @@ class ApprovalService:
             approval["current_signer"] = transfer_to or approval.get("current_signer", "")
             approval["history"].append(f"[{now_str}] {signer_name} 轉交給 {approval.get('current_signer', '')}。意見: {reason}")
         approval["updated_at"] = now_text()
-        ApprovalService.save_all(st.session_state.approvals)
+        all_records = ApprovalService.load_all()
+        for index, row in enumerate(all_records):
+            if parse_int(row.get("id"), 0) == parse_int(approval.get("id"), 0):
+                all_records[index] = approval
+                break
+        ApprovalService.save_all(all_records)
 
 
 class AnnouncementService:
     WORKSHEET_NAME = "Announcements"
     COLUMNS = [
-        "id", "title", "content", "level", "author", "author_account", "created_at", "expires_at",
+        "id", "department", "title", "content", "level", "author", "author_account", "created_at", "expires_at",
         "pinned", "active", "attachment_name", "attachment_type", "attachment_base64", "seen_by",
     ]
 
@@ -676,6 +749,8 @@ class AnnouncementService:
         today = date.today()
         active = []
         for ann in AnnouncementService.load_all():
+            if record_department(ann) != current_department():
+                continue
             if bool_text(ann.get("active", "TRUE")) == "FALSE":
                 continue
             expires_at = parse_date(ann.get("expires_at", ""), None)
@@ -699,6 +774,7 @@ class AnnouncementService:
 
         row = {
             "id": next_id,
+            "department": current_department(),
             "title": title.strip(),
             "content": content.strip(),
             "level": level,
@@ -758,5 +834,3 @@ class AnnouncementService:
             if user not in seen:
                 count += 1
         return count
-
-

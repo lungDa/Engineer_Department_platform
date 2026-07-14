@@ -46,8 +46,12 @@ class TaskRepository(BaseRepository):
         due_before: date | str | None = None,
         due_after: date | str | None = None,
         keyword: str | None = None,
+        department: str | None = None,
     ) -> list[dict]:
         tasks = self.get_all()
+
+        if department:
+            tasks = [task for task in tasks if str(task.get("department") or "儀電規劃課") == department]
 
         if status:
             tasks = [task for task in tasks if self._match_equal(task.get("status"), status)]
