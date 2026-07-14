@@ -74,7 +74,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V5.3.3 Personnel Permission Gate"
+    VERSION = "V5.5.2 Split Announcement Permissions"
 
     @staticmethod
     def load_enterprise_theme():
@@ -134,7 +134,7 @@ class AppInitializer:
                 partners.append(name)
 
         st.session_state.partners = sorted(partners)
-        st.session_state.roles = {u.get("name", ""): parse_int(u.get("role_level", 0), 0) for u in users}
+        st.session_state.roles = {u.get("name", ""): UserService.effective_role_level(u) for u in users}
         st.session_state.categories = CategoryService.load_names()
         st.session_state.tags_list = TagService.load_names()
 
@@ -157,7 +157,7 @@ class UserService:
     DEFAULT_PASSWORD = "0000"
     COLUMNS = [
         "id", "name", "account", "password", "role", "role_level", "active",
-        "department", "must_change_password", "created_at", "updated_at", "last_login_at",
+        "department", "assignments", "must_change_password", "created_at", "updated_at", "last_login_at",
     ]
 
     @staticmethod
@@ -165,9 +165,9 @@ class UserService:
         now = now_text()
         return [
             {"id": 1, "name": "開發者", "account": "developer", "password": UserService.DEFAULT_PASSWORD, "role": "開發者", "role_level": 9, "active": "TRUE", "department": "儀電規劃課", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
-            {"id": 2, "name": "王大明", "account": "wang", "password": UserService.DEFAULT_PASSWORD, "role": "主管", "role_level": 1, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
-            {"id": 3, "name": "陳小華", "account": "chen", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
-            {"id": 4, "name": "林志玲", "account": "lin", "password": UserService.DEFAULT_PASSWORD, "role": "一般人員", "role_level": 0, "active": "TRUE", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 2, "name": "王大明", "account": "wang", "password": UserService.DEFAULT_PASSWORD, "role": "工程師", "role_level": 1, "active": "TRUE", "department": "儀電規劃課", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 3, "name": "陳小華", "account": "chen", "password": UserService.DEFAULT_PASSWORD, "role": "助理工程師", "role_level": 0, "active": "TRUE", "department": "儀電規劃課", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 4, "name": "林志玲", "account": "lin", "password": UserService.DEFAULT_PASSWORD, "role": "助理工程師", "role_level": 0, "active": "TRUE", "department": "儀電規劃課", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
         ]
 
     @staticmethod
@@ -190,6 +190,52 @@ class UserService:
         return [u for u in UserService.load_all() if bool_text(u.get("active", "TRUE")) == "TRUE"]
 
     @staticmethod
+    def get_assignments(user: dict | None) -> list[dict]:
+        """回傳主要職務＋兼任職務，並移除重複組合。"""
+        if not user:
+            return []
+        primary = {
+            "department": record_department(user),
+            "role": str(user.get("role") or "助理工程師"),
+            "role_level": parse_int(user.get("role_level", 0), 0),
+            "primary": True,
+        }
+        rows = [primary]
+        for item in parse_json_list(user.get("assignments")):
+            if not isinstance(item, dict):
+                continue
+            department = str(item.get("department") or "").strip()
+            role = str(item.get("role") or "").strip()
+            if not department or not role:
+                continue
+            rows.append({
+                "department": department,
+                "role": role,
+                "role_level": parse_int(item.get("role_level", 0), 0),
+                "primary": False,
+            })
+        unique = []
+        seen = set()
+        for item in rows:
+            key = (item["department"], item["role"])
+            if key not in seen:
+                seen.add(key)
+                unique.append(item)
+        return unique
+
+    @staticmethod
+    def effective_role_level(user: dict | None) -> int:
+        return max([parse_int(item.get("role_level", 0), 0) for item in UserService.get_assignments(user)], default=0)
+
+    @staticmethod
+    def has_department(user: dict | None, department: str) -> bool:
+        return any(item.get("department") == department for item in UserService.get_assignments(user))
+
+    @staticmethod
+    def roles_in_department(user: dict | None, department: str) -> list[str]:
+        return [item.get("role", "") for item in UserService.get_assignments(user) if item.get("department") == department]
+
+    @staticmethod
     def get_partner_names() -> list[str]:
         """Return active user display names from the Users Google Sheet.
 
@@ -199,7 +245,7 @@ class UserService:
         names = []
         seen = set()
         for user in UserService.get_active_users():
-            if record_department(user) != current_department():
+            if not UserService.has_department(user, current_department()):
                 continue
             name = str(user.get("name", "")).strip()
             if name and name not in seen:
@@ -215,7 +261,7 @@ class UserService:
     @staticmethod
     def get_users_by_department(department: str, active_only: bool = True) -> list[dict]:
         rows = UserService.get_active_users() if active_only else UserService.load_all()
-        return [u for u in rows if record_department(u) == department]
+        return [u for u in rows if UserService.has_department(u, department)]
 
     @staticmethod
     def is_developer_user(user: dict[str, Any] | None) -> bool:
@@ -233,7 +279,7 @@ class UserService:
             return False
         account = str(user.get("account", "")).strip().lower()
         role = str(user.get("role", "")).strip().lower()
-        role_level = parse_int(user.get("role_level", 0), 0)
+        role_level = UserService.effective_role_level(user)
         return (
             account in {"developer", "dev"}
             or "開發" in role
@@ -254,6 +300,16 @@ class UserService:
             if str(user.get("password", "")) == str(password):
                 return True, "開發者驗證成功。"
         return False, "開發者密碼錯誤。"
+
+    @staticmethod
+    def verify_management_credentials(account: str, password: str, minimum_level: int = 6):
+        ok, msg, user = UserService.authenticate(account, password)
+        if not ok:
+            return False, msg, None
+        level = UserService.effective_role_level(user)
+        if level < minimum_level:
+            return False, f"權限不足：人員管理需要權限 {minimum_level} 以上。", None
+        return True, "管理權限驗證成功。", user
 
     @staticmethod
     def get_by_account(account):
@@ -308,7 +364,7 @@ class UserService:
         return False, "找不到帳號。"
 
     @staticmethod
-    def upsert_user(name, account, role, role_level, active=True, reset_password=False, direct_password="", department=None):
+    def upsert_user(name, account, role, role_level, active=True, reset_password=False, direct_password="", department=None, assignments=None):
         records = UserService.load_all()
         now = now_text()
         target = str(account).strip().lower()
@@ -320,6 +376,8 @@ class UserService:
                 row["role_level"] = int(role_level)
                 row["active"] = bool_text(active)
                 row["department"] = department or record_department(row)
+                if assignments is not None:
+                    row["assignments"] = json.dumps(assignments, ensure_ascii=False)
                 if direct_password:
                     row["password"] = str(direct_password)
                     row["must_change_password"] = "TRUE"
@@ -339,6 +397,7 @@ class UserService:
             "role_level": int(role_level),
             "active": bool_text(active),
             "department": department or current_department(),
+            "assignments": json.dumps(assignments or [], ensure_ascii=False),
             "must_change_password": "TRUE",
             "created_at": now,
             "updated_at": now,
@@ -714,7 +773,7 @@ class AnnouncementService:
 
     @staticmethod
     def is_admin(user=None):
-        return st.session_state.roles.get(user or "", 0) >= 2
+        return st.session_state.roles.get(user or "", 0) >= 6
 
     @staticmethod
     def using_google_sheet():

@@ -155,15 +155,15 @@ if st.session_state.get("show_developer_panel", False):
         st.markdown("#### 🛠️ 開發者工具")
         if not st.session_state.get("developer_diagnostics_unlocked", False):
             with st.form("developer_diagnostics_login"):
-                developer_password = st.text_input(
-                    "請輸入 Users 人員清單中的開發者密碼",
-                    type="password",
-                    help="請在 Google Sheet 的 Users 工作表建立開發者帳號，role 設為「開發者」或 role_level 設為 9 以上。",
-                )
+                developer_password = st.text_input("開發者密碼", type="password")
+                st.caption("首頁只驗證開發者。其他角色會在使用需要權限的功能時才驗證。")
                 submitted = st.form_submit_button("進入開發者模式")
                 if submitted:
                     ok, msg = UserService.verify_developer_password(developer_password)
                     if ok:
+                        st.session_state["personnel_management_unlocked"] = True
+                        st.session_state["management_user"] = "開發者"
+                        st.session_state["management_role_level"] = 9
                         st.session_state["developer_diagnostics_unlocked"] = True
                         st.success("開發者驗證成功。")
                         st.rerun()
@@ -172,10 +172,15 @@ if st.session_state.get("show_developer_panel", False):
         else:
             col_a, col_b = st.columns([3, 1])
             with col_a:
-                st.success("開發者模式已啟用；人員名單頁已開放新增與修改功能。")
+                st.success(
+                    "開發者模式已啟用｜權限 9"
+                )
             with col_b:
                 if st.button("登出開發者模式", width="stretch"):
+                    st.session_state["personnel_management_unlocked"] = False
                     st.session_state["developer_diagnostics_unlocked"] = False
+                    st.session_state.pop("management_user", None)
+                    st.session_state.pop("management_role_level", None)
                     st.session_state["show_developer_panel"] = False
                     st.rerun()
 
@@ -184,6 +189,11 @@ if st.session_state.get("show_developer_panel", False):
                 st.caption("人員依課別分組；任務、會議與簽核的人名選單只顯示目前課別成員。")
                 selected_department = st.selectbox("管理課別", DEPARTMENTS, key="developer_manage_department")
                 users = UserService.get_users_by_department(selected_department, active_only=False)
+                operator_level = int(st.session_state.get("management_role_level", 0) or 0)
+                manageable_users = [
+                    user for user in users
+                    if UserService.effective_role_level(user) <= operator_level
+                ]
                 if users:
                     st.dataframe(
                         [{
@@ -212,24 +222,30 @@ if st.session_state.get("show_developer_panel", False):
                     with st.form("developer_user_editor"):
                         name = st.text_input("姓名")
                         account = st.text_input("帳號（既有帳號會更新資料）")
-                        role = st.selectbox("角色／權限", list(ROLE_LEVELS.keys()), index=1)
+                        allowed_roles = [name for name, level in ROLE_LEVELS.items() if level <= operator_level]
+                        role = st.selectbox("角色／權限", allowed_roles, index=len(allowed_roles) - 1)
                         active = st.checkbox("啟用帳號", value=True)
                         direct_password = st.text_input("設定密碼（新增時空白為 0000）", type="password")
                         if st.form_submit_button("儲存人員", width="stretch"):
                             if not name.strip() or not account.strip():
                                 st.error("姓名與帳號為必填。")
                             else:
-                                result = UserService.upsert_user(
-                                    name=name, account=account, role=role,
-                                    role_level=ROLE_LEVELS[role], active=active,
-                                    direct_password=direct_password,
-                                    department=selected_department,
-                                )
-                                st.success("人員已新增。" if result == "created" else "人員資料與權限已更新。")
-                                st.rerun()
+                                existing_user = UserService.get_by_account(account)
+                                existing_level = UserService.effective_role_level(existing_user)
+                                if existing_user and existing_level > operator_level:
+                                    st.error("不可修改權限高於目前登入者的人員。")
+                                else:
+                                    result = UserService.upsert_user(
+                                        name=name, account=account, role=role,
+                                        role_level=ROLE_LEVELS[role], active=active,
+                                        direct_password=direct_password,
+                                        department=selected_department,
+                                    )
+                                    st.success("人員已新增。" if result == "created" else "人員資料與權限已更新。")
+                                    st.rerun()
 
                 with st.expander("🗑️ 刪除人員"):
-                    deletable = {f"{u.get('name')}（{u.get('account')}）": u.get("account") for u in users}
+                    deletable = {f"{u.get('name')}（{u.get('account')}）": u.get("account") for u in manageable_users}
                     if deletable:
                         target_label = st.selectbox("選擇人員", list(deletable.keys()))
                         confirm = st.checkbox("我確認要永久刪除此人員")
@@ -242,7 +258,10 @@ if st.session_state.get("show_developer_panel", False):
                         st.info("沒有可刪除的人員。")
 
             with diagnostics_tab:
-                render_enterprise_diagnostics()
+                if st.session_state.get("developer_diagnostics_unlocked", False):
+                    render_enterprise_diagnostics()
+                else:
+                    st.warning("系統診斷與其他開發者功能僅限開發者（權限 9）使用。")
 
 ViewComponents.render_announcement_board()
 

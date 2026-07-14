@@ -121,7 +121,7 @@ class ViewComponents:
                 with st.expander("Google Sheet 連線訊息", expanded=False):
                     st.code(str(sheet_status.get("error")), language="text")
 
-        with st.expander("📣 發布公告（需輸入發布人工號與密碼）", expanded=False):
+        with st.expander("📣 發布公告（所有啟用人員皆可發布）", expanded=False):
             with st.form("enterprise_announcement_form", clear_on_submit=True):
                 c0a, c0b = st.columns(2)
                 with c0a:
@@ -212,8 +212,8 @@ class ViewComponents:
                         if not ok:
                             st.error(msg)
                             return False
-                        if parse_int(admin.get("role_level", 0), 0) < 2:
-                            st.error("此帳號不是管理員，無法管理公告。")
+                        if UserService.effective_role_level(admin) < 6:
+                            st.error("公告管理需要權限 6 以上。")
                             return False
                         return True
                     with b1:

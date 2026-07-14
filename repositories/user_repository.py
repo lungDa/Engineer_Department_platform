@@ -90,7 +90,7 @@ class UserRepository(BaseRepository):
             return False
         account = str(user.get("account", "")).strip().lower()
         role = str(user.get("role", "")).strip().lower()
-        role_level = parse_int(user.get("role_level", 0), 0)
+        role_level = LegacyUserService.effective_role_level(user)
         return (
             account in {"developer", "dev"}
             or "開發" in role
