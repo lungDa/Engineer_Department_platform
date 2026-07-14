@@ -5,7 +5,7 @@ from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine 
 from config.departments import DEPARTMENTS
 from config.roles import ROLE_LEVELS
 
-st.set_page_config(page_title="鋒霈 工程部 專業系統", layout="wide")
+st.set_page_config(page_title="鋒霈 工程一部 專業系統", layout="wide")
 
 AppInitializer.setup()
 ViewComponents.render_public_sidebar()
