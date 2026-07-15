@@ -12,7 +12,7 @@ ViewComponents.render_public_sidebar()
 
 title_col, dev_col = st.columns([8, 1])
 with title_col:
-    st.title("🚀 歡迎使用/n 鋒霈 工程一部 管理平台")
+    st.title("🚀 歡迎使用 工程一部_管理平台")
 with dev_col:
     st.write("")
     if st.button("🛠️ 開發者", width="stretch"):
