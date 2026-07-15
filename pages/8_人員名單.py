@@ -77,7 +77,8 @@ PERSONNEL_COLUMN_CONFIG = {
     "本課職務": st.column_config.TextColumn("本課職務", width="large"),
     "最高權限": st.column_config.NumberColumn("最高權限", width="small", format="%d"),
 }
-PERSONNEL_TABLE_HEIGHT = 245
+# 固定顯示表頭＋3 筆人員資料；第 4 筆起由表格內垂直滾輪查看。
+PERSONNEL_TABLE_HEIGHT = 143
 
 for department in DEPARTMENTS:
     users = UserService.get_users_by_department(department)
