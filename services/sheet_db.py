@@ -27,7 +27,7 @@ def _cached_spreadsheet(sheet_id: str, service_account_json: str):
     return client.open_by_key(sheet_id)
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _cached_sheet_records(name: str, columns_json: str, default_rows_json: str, cache_version: int):
     """Read and cache one worksheet for a short time.
 
@@ -50,7 +50,7 @@ def _cached_sheet_records(name: str, columns_json: str, default_rows_json: str, 
     return SheetDB.normalize_records(records, columns)
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def _cached_sheet_bundle(specs_json: str, cache_version: int):
     """Read multiple worksheets with one Google Sheets batch request."""
     specs = json.loads(specs_json)
@@ -87,10 +87,12 @@ class SheetDB:
         "Users": 600,
         "Categories": 1800,
         "Tags": 1800,
+        # 頁面切換優先讀記憶體；新增、修改、刪除後仍會主動失效。
+        # 動態業務資料依需求每 5 秒允許重新同步 Google Sheet。
         "Tasks": 5,
-        "Announcements": 10,
-        "Meetings": 10,
-        "Approvals": 10,
+        "Announcements": 5,
+        "Meetings": 5,
+        "Approvals": 5,
     }
 
     SCOPES = [

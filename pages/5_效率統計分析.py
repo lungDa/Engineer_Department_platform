@@ -1,13 +1,13 @@
-import streamlit as st
-import plotly.express as px
-import pandas as pd
-from utils import StreamFlowEngine as engine
-from utils import TaskService, StreamFlowEngine as engine
 from datetime import date
 
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+
+from utils import AppInitializer, StreamFlowEngine as engine
+
 st.header("📈 效率統計分析")
-from utils import AppInitializer, StreamFlowEngine, ViewComponents, TaskService # 根據該頁面需求 import
-AppInitializer.setup()
+AppInitializer.setup(load_tasks=True, load_meetings=False, load_approvals=False)
 active = [t for t in st.session_state.tasks if t['status'] == 'Active']
 
 if not active:

@@ -2,11 +2,9 @@ import streamlit as st
 import calendar
 from datetime import date
 
-from utils import ViewComponents
+from utils import AppInitializer, ViewComponents
 
-from utils import AppInitializer, StreamFlowEngine, ViewComponents, TaskService # 根據該頁面需求 import
-from utils import MeetingService
-AppInitializer.setup(load_meetings=True)
+AppInitializer.setup(load_tasks=True, load_meetings=True, load_approvals=False)
 st.header("📅 專案行事曆")
 
 
