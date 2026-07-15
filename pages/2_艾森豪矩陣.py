@@ -31,13 +31,13 @@ st.set_page_config(
 
 AppInitializer.setup()
 
-APP_VERSION = "V8 Fixed Quadrant Scroll"
+APP_VERSION = "V8.2 Fixed Matrix & Insight Scroll"
 TODAY = date.today()
 Task = Dict[str, Any]
 
-# 四個象限統一使用固定高度；約可完整顯示 3 張任務卡。
-# 第 4 筆以後仍會保留在象限內，使用滑鼠滾輪垂直查看。
-QUADRANT_TASK_VIEW_HEIGHT = 690
+# 每張任務卡固定 172px，三張卡＋間距剛好放入 536px 捲動區。
+# 因此畫面會精準呈現 3 張完整任務卡，第 4 張起需滾動查看。
+QUADRANT_TASK_VIEW_HEIGHT = 536
 
 
 # ============================================================
@@ -422,23 +422,194 @@ div[data-testid="stVerticalBlockBorderWrapper"]{
 .task-mini-title{font-size:16px;font-weight:900;color:#FFFFFF !important;}
 .task-meta{color:var(--text-muted) !important;font-size:13px;line-height:1.8;}
 
-/* 固定象限內任務卡的視覺節奏，讓四個象限高度一致。 */
-.quadrant-scroll-note{
-    color:var(--text-soft) !important;
+/* 固定四象限：標題不動，只有任務卡清單捲動。 */
+.matrix-quadrant{
+    height:670px;
+    box-sizing:border-box;
+    background:linear-gradient(180deg,#1E293B 0%,#111827 100%);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:16px;
+    box-shadow:0 8px 24px rgba(0,0,0,.34);
+    overflow:hidden;
+    margin-bottom:18px;
+}
+.matrix-quadrant-head{
+    height:92px;
+    box-sizing:border-box;
+    border-bottom:1px solid #334155;
+    margin-bottom:10px;
+}
+.matrix-quadrant-title-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+}
+.matrix-quadrant-count{
+    flex:none;
+    border-radius:999px;
+    background:#1D4ED8;
+    border:1px solid #3B82F6;
+    padding:4px 9px;
+    color:#FFF !important;
     font-size:12px;
-    margin:2px 0 8px 0;
+    font-weight:800;
+}
+.matrix-task-scroll{
+    height:536px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    padding-right:7px;
+    scroll-behavior:smooth;
+    scrollbar-color:#475569 #111827;
+    scrollbar-width:thin;
+}
+.matrix-task-scroll::-webkit-scrollbar{width:8px;}
+.matrix-task-scroll::-webkit-scrollbar-thumb{background:#475569;border-radius:999px;}
+.matrix-task-scroll::-webkit-scrollbar-track{background:#111827;border-radius:999px;}
+.matrix-task-card{
+    height:172px;
+    box-sizing:border-box;
+    background:#0F172A;
+    border:1px solid #334155;
+    border-radius:14px;
+    padding:12px 13px;
+    margin-bottom:10px;
+    overflow:hidden;
+}
+.matrix-task-card:last-child{margin-bottom:0;}
+.matrix-task-title{
+    height:23px;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+    font-size:15px;
+    font-weight:900;
+    color:#FFF !important;
+}
+.matrix-task-line{
+    height:22px;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+    color:#CBD5E1 !important;
+    font-size:12px;
+    line-height:22px;
+}
+.matrix-task-badges{height:26px;overflow:hidden;white-space:nowrap;}
+.matrix-badge{
+    display:inline-block;
+    padding:3px 7px;
+    margin:2px 4px 2px 0;
+    border-radius:999px;
+    background:#1E3A8A;
+    border:1px solid #2563EB;
+    color:#DBEAFE !important;
+    font-size:11px;
+    font-weight:800;
+}
+.matrix-badge.red{background:#450A0A;border-color:#DC2626;color:#FECACA !important;}
+.matrix-badge.orange{background:#451A03;border-color:#F59E0B;color:#FDE68A !important;}
+.matrix-badge.green{background:#052E16;border-color:#16A34A;color:#BBF7D0 !important;}
+.matrix-progress-track{height:7px;background:#334155;border-radius:999px;overflow:hidden;margin-top:6px;}
+.matrix-progress-fill{height:7px;background:linear-gradient(90deg,#2563EB,#22C55E);border-radius:999px;}
+.matrix-empty{
+    height:172px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:1px dashed #475569;
+    border-radius:14px;
+    color:#94A3B8 !important;
+    font-weight:800;
 }
 
-/* Streamlit height container 的捲軸樣式 */
-div[data-testid="stVerticalBlock"]::-webkit-scrollbar{
-    width:8px;
+/* 右側洞察面板：標題固定、精準顯示三張、其餘滾動。 */
+.insight-panel{
+    height:402px;
+    box-sizing:border-box;
+    background:linear-gradient(180deg,#1E293B 0%,#111827 100%);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:13px;
+    box-shadow:0 8px 24px rgba(0,0,0,.34);
+    overflow:hidden;
+    margin-bottom:18px;
 }
-div[data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb{
-    background:#475569;
+.insight-head{
+    height:42px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    border-bottom:1px solid #334155;
+    margin-bottom:8px;
+    font-size:16px;
+    font-weight:900;
+    color:#FFF !important;
+}
+.insight-count{
+    flex:none;
+    padding:3px 7px;
     border-radius:999px;
+    background:#1D4ED8;
+    border:1px solid #3B82F6;
+    color:#FFF !important;
+    font-size:11px;
+    font-weight:800;
 }
-div[data-testid="stVerticalBlock"]::-webkit-scrollbar-track{
-    background:#111827;
+.insight-scroll{
+    height:326px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    padding-right:6px;
+    scrollbar-color:#475569 #111827;
+    scrollbar-width:thin;
+}
+.insight-scroll::-webkit-scrollbar{width:7px;}
+.insight-scroll::-webkit-scrollbar-thumb{background:#475569;border-radius:999px;}
+.insight-scroll::-webkit-scrollbar-track{background:#111827;border-radius:999px;}
+.insight-card{
+    height:102px;
+    box-sizing:border-box;
+    background:#0F172A;
+    border:1px solid #334155;
+    border-radius:12px;
+    padding:9px 10px;
+    margin-bottom:10px;
+    overflow:hidden;
+}
+.insight-card:last-child{margin-bottom:0;}
+.insight-task-title{
+    height:22px;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+    font-size:13px;
+    font-weight:900;
+    color:#FFF !important;
+}
+.insight-task-meta{
+    height:21px;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+    font-size:11px;
+    line-height:21px;
+    color:#CBD5E1 !important;
+}
+.insight-empty{
+    height:102px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border:1px dashed #475569;
+    border-radius:12px;
+    color:#94A3B8 !important;
+    font-size:12px;
+    font-weight:800;
+    text-align:center;
 }
 
 /* Inputs */
@@ -598,42 +769,93 @@ def render_task_card(task: Task) -> None:
 
 
 def render_quadrant(icon: str, title: str, subtitle: str, tasks: List[Task]) -> None:
-    with st.container(border=True):
-        head_l, head_r = st.columns([3, 1])
-        with head_l:
-            st.markdown(f"<div class='quadrant-title'>{icon} {title}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='quadrant-sub'>{subtitle}</div>", unsafe_allow_html=True)
-        with head_r:
-            st.badge(f"{len(tasks)} Tasks", color="blue")
+    cards = []
+    for task in tasks:
+        task_title = html.escape(get_task_title(task))
+        category = html.escape(get_category(task))
+        due = html.escape(text(get_due_value(task), "未設定"))
+        progress = get_progress(task)
+        due_label, due_color, _ = task_due_status(task)
+        score = get_priority_score(task)
+        risk_level = get_risk_level(score)
+        people = normalize_people(task.get("assignees"))
+        people_text = html.escape("、".join(people) if people else "未指派")
+        description = text(task.get("description") or task.get("notes") or task.get("備註"), "無備註")
+        description = html.escape(description[:55] + ("…" if len(description) > 55 else ""))
+        color_class = due_color if due_color in {"red", "orange", "green"} else ""
 
-        st.markdown(
-            "<div class='quadrant-scroll-note'>固定顯示區約 3 筆任務｜第 4 筆起請在框內使用滾輪查看</div>",
-            unsafe_allow_html=True,
+        cards.append(
+            f"""
+            <div class="matrix-task-card" title="{task_title}">
+                <div class="matrix-task-title">📌 {task_title}</div>
+                <div class="matrix-task-line">👤 {people_text}</div>
+                <div class="matrix-task-line">🏷️ {category}　｜　📅 {due}</div>
+                <div class="matrix-task-line">📝 {description}</div>
+                <div class="matrix-task-badges">
+                    <span class="matrix-badge {color_class}">{html.escape(due_label)}</span>
+                    <span class="matrix-badge">{risk_level}｜Risk {score}</span>
+                </div>
+                <div class="matrix-progress-track">
+                    <div class="matrix-progress-fill" style="width:{progress}%"></div>
+                </div>
+            </div>
+            """
         )
 
-        # 固定高度的 Streamlit 原生容器會自動產生垂直捲軸。
-        # 不使用 tasks[:3]，所以後續任務不會被省略或遺失。
-        with st.container(height=QUADRANT_TASK_VIEW_HEIGHT, border=False):
-            if not tasks:
-                st.info("目前沒有任務")
-            else:
-                for task in tasks:
-                    render_task_card(task)
+    task_content = "".join(cards) if cards else '<div class="matrix-empty">目前沒有任務</div>'
+    st.markdown(
+        f"""
+        <div class="matrix-quadrant">
+            <div class="matrix-quadrant-head">
+                <div class="matrix-quadrant-title-row">
+                    <div class="quadrant-title">{icon} {html.escape(title)}</div>
+                    <div class="matrix-quadrant-count">{len(tasks)} Tasks</div>
+                </div>
+                <div class="quadrant-sub">{html.escape(subtitle)}</div>
+            </div>
+            <div class="matrix-task-scroll">{task_content}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_insight_panel(title: str, tasks: List[Task], empty_text: str) -> None:
-    with st.container(border=True):
-        st.subheader(title)
-        if not tasks:
-            st.info(empty_text)
-            return
-        for task in tasks[:5]:
-            score = get_priority_score(task)
-            due_label, color, _ = task_due_status(task)
-            people = ", ".join(normalize_people(task.get("assignees"))) or "未指派"
-            with st.container(border=True):
-                st.markdown(f"**{get_task_title(task)}**")
-                st.caption(f"{due_label}｜Risk {score}｜{people}")
+    cards = []
+    for task in tasks:
+        task_title = html.escape(get_task_title(task))
+        score = get_priority_score(task)
+        due_label, due_color, _ = task_due_status(task)
+        people = html.escape("、".join(normalize_people(task.get("assignees"))) or "未指派")
+        progress = get_progress(task)
+        color_class = due_color if due_color in {"red", "orange", "green"} else ""
+        cards.append(
+            f"""
+            <div class="insight-card" title="{task_title}">
+                <div class="insight-task-title">📌 {task_title}</div>
+                <div class="insight-task-meta">👤 {people}</div>
+                <div class="insight-task-meta">{html.escape(due_label)}</div>
+                <div class="matrix-task-badges">
+                    <span class="matrix-badge {color_class}">Risk {score}</span>
+                    <span class="matrix-badge">進度 {progress}%</span>
+                </div>
+            </div>
+            """
+        )
+
+    task_content = "".join(cards) if cards else f'<div class="insight-empty">{html.escape(empty_text)}</div>'
+    st.markdown(
+        f"""
+        <div class="insight-panel">
+            <div class="insight-head">
+                <span>{html.escape(title)}</span>
+                <span class="insight-count">{len(tasks)}</span>
+            </div>
+            <div class="insight-scroll">{task_content}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ============================================================
