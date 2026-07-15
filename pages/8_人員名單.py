@@ -68,6 +68,17 @@ summary_cols[3].metric("目前課別", st.session_state.current_department)
 
 st.divider()
 
+# 所有部門共用同一組欄位、順序、寬度與表格高度，避免各表格隨內容偏移。
+PERSONNEL_COLUMNS = ["課別", "姓名", "帳號／工號", "本課職務", "最高權限"]
+PERSONNEL_COLUMN_CONFIG = {
+    "課別": st.column_config.TextColumn("課別", width="medium"),
+    "姓名": st.column_config.TextColumn("姓名", width="small"),
+    "帳號／工號": st.column_config.TextColumn("帳號／工號", width="medium"),
+    "本課職務": st.column_config.TextColumn("本課職務", width="large"),
+    "最高權限": st.column_config.NumberColumn("最高權限", width="small", format="%d"),
+}
+PERSONNEL_TABLE_HEIGHT = 245
+
 for department in DEPARTMENTS:
     users = UserService.get_users_by_department(department)
     if keyword.strip():
@@ -81,10 +92,6 @@ for department in DEPARTMENTS:
         ]
 
     with st.expander(f"🏢 {department}　｜　{len(users)} 人", expanded=department == st.session_state.current_department):
-        if not users:
-            st.info("此課別目前沒有符合條件的啟用人員。")
-            continue
-
         rows = [
             {
                 "課別": department,
@@ -92,11 +99,20 @@ for department in DEPARTMENTS:
                 "帳號／工號": user.get("account", ""),
                 "本課職務": "、".join(UserService.roles_in_department(user, department)),
                 "最高權限": UserService.effective_role_level(user),
-                "主要／兼任": "主要" if str(user.get("department") or "儀電規劃課") == department else "兼任",
             }
             for user in sorted(users, key=lambda item: str(item.get("name", "")))
         ]
-        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        personnel_df = pd.DataFrame(rows, columns=PERSONNEL_COLUMNS)
+        st.dataframe(
+            personnel_df,
+            width="stretch",
+            height=PERSONNEL_TABLE_HEIGHT,
+            hide_index=True,
+            column_order=PERSONNEL_COLUMNS,
+            column_config=PERSONNEL_COLUMN_CONFIG,
+        )
+        if not users:
+            st.caption("此課別目前沒有符合條件的啟用人員。")
 
 
 if management_unlocked:
