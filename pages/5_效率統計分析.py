@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from utils import AppInitializer, StreamFlowEngine as engine
+from utils import AppInitializer, TaskService
 
 st.header("📈 效率統計分析")
 AppInitializer.setup(load_tasks=True, load_meetings=False, load_approvals=False)

@@ -2,7 +2,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from utils import AppInitializer, ApprovalService
+from utils import AppInitializer, ApprovalService, StreamFlowEngine as engine
 
 AppInitializer.setup(load_tasks=False, load_approvals=True)
 
