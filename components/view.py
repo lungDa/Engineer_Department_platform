@@ -43,7 +43,7 @@ class ViewComponents:
         st.sidebar.markdown(
             f"""
             <div class="edp-sidebar-brand">
-                <div class="edp-sidebar-title">鋒霈工程部平台</div>
+                <div class="edp-sidebar-title">鋒霈工程一部平台</div>
                 <div class="edp-sidebar-sub">Project · Task · Meeting · Approval</div>
                 <div class="edp-version-pill">● {st.session_state.get('app_version', 'V3.7 Enterprise Theme V1')}</div>
             </div>
