@@ -3,7 +3,7 @@ import streamlit as st
 
 from config.departments import DEPARTMENTS
 from config.roles import ROLE_LEVELS
-from utils import AppInitializer, UserService
+from utils import AppInitializer, UserService, parse_int
 
 
 st.set_page_config(page_title="人員名單｜課別分類", layout="wide")
@@ -69,13 +69,13 @@ summary_cols[3].metric("目前課別", st.session_state.current_department)
 st.divider()
 
 # 所有部門共用同一組欄位、順序、寬度與表格高度，避免各表格隨內容偏移。
-PERSONNEL_COLUMNS = ["課別", "姓名", "帳號／工號", "本課職務", "最高權限"]
+PERSONNEL_COLUMNS = ["課別", "姓名", "帳號／工號", "本課職務", "主要權限"]
 PERSONNEL_COLUMN_CONFIG = {
     "課別": st.column_config.TextColumn("課別", width="medium"),
     "姓名": st.column_config.TextColumn("姓名", width="small"),
     "帳號／工號": st.column_config.TextColumn("帳號／工號", width="medium"),
     "本課職務": st.column_config.TextColumn("本課職務", width="large"),
-    "最高權限": st.column_config.NumberColumn("最高權限", width="small", format="%d"),
+    "主要權限": st.column_config.NumberColumn("主要權限", width="small", format="%d"),
 }
 # 固定顯示表頭＋3 筆人員資料；第 4 筆起由表格內垂直滾輪查看。
 PERSONNEL_TABLE_HEIGHT = 143
@@ -99,9 +99,19 @@ for department in DEPARTMENTS:
                 "姓名": user.get("name", ""),
                 "帳號／工號": user.get("account", ""),
                 "本課職務": "、".join(UserService.roles_in_department(user, department)),
-                "最高權限": UserService.effective_role_level(user),
+                # 名單顯示與排序只採主要職務權限，不計兼任職務。
+                "主要權限": parse_int(user.get("role_level", 0), 0),
             }
-            for user in sorted(users, key=lambda item: str(item.get("name", "")))
+            # 主要職務權限由高至低；兼任職務權限不參與排序。
+            # 同一主要權限時依姓名排序。
+            # 新增／修改完成後 st.rerun()，會立即按最新權限重新排列。
+            for user in sorted(
+                users,
+                key=lambda item: (
+                    -parse_int(item.get("role_level", 0), 0),
+                    str(item.get("name", "")),
+                ),
+            )
         ]
         personnel_df = pd.DataFrame(rows, columns=PERSONNEL_COLUMNS)
         st.dataframe(
