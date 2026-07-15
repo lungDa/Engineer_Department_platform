@@ -5,14 +5,14 @@ from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine 
 from config.departments import DEPARTMENTS
 from config.roles import ROLE_LEVELS
 
-st.set_page_config(page_title="鋒霈 工程一部 專業系統", layout="wide")
+st.set_page_config(page_title="鋒霈 工程一部 系統平台", layout="wide")
 
 AppInitializer.setup()
 ViewComponents.render_public_sidebar()
 
 title_col, dev_col = st.columns([8, 1])
 with title_col:
-    st.title("🚀 歡迎使用 鋒霈 工程一部 專業任務管理系統")
+    st.title("🚀 歡迎使用 鋒霈 工程一部 任務管理系統")
 with dev_col:
     st.write("")
     if st.button("🛠️ 開發者", width="stretch"):
