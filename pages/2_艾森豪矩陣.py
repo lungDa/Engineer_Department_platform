@@ -32,7 +32,7 @@ st.set_page_config(
 
 AppInitializer.setup()
 
-APP_VERSION = "V8.2 Fixed Matrix & Insight Scroll"
+APP_VERSION = "V8.2.2 HTML Render Hotfix"
 TODAY = date.today()
 Task = Dict[str, Any]
 
@@ -50,6 +50,11 @@ def text(value: Any, default: str = "") -> str:
         return default
     s = str(value).strip()
     return s if s else default
+
+
+def compact_html(markup: str) -> str:
+    """移除多行 HTML 的行首縮排，避免 Streamlit Markdown 誤判為程式碼區塊。"""
+    return "".join(line.strip() for line in str(markup).splitlines())
 
 
 def normalize_people(value: Any) -> List[str]:
@@ -786,7 +791,7 @@ def render_quadrant(icon: str, title: str, subtitle: str, tasks: List[Task]) -> 
         color_class = due_color if due_color in {"red", "orange", "green"} else ""
 
         cards.append(
-            f"""
+            compact_html(f"""
             <div class="matrix-task-card" title="{task_title}">
                 <div class="matrix-task-title">📌 {task_title}</div>
                 <div class="matrix-task-line">👤 {people_text}</div>
@@ -800,12 +805,12 @@ def render_quadrant(icon: str, title: str, subtitle: str, tasks: List[Task]) -> 
                     <div class="matrix-progress-fill" style="width:{progress}%"></div>
                 </div>
             </div>
-            """
+            """)
         )
 
     task_content = "".join(cards) if cards else '<div class="matrix-empty">目前沒有任務</div>'
     st.markdown(
-        f"""
+        compact_html(f"""
         <div class="matrix-quadrant">
             <div class="matrix-quadrant-head">
                 <div class="matrix-quadrant-title-row">
@@ -816,7 +821,7 @@ def render_quadrant(icon: str, title: str, subtitle: str, tasks: List[Task]) -> 
             </div>
             <div class="matrix-task-scroll">{task_content}</div>
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
 
@@ -831,7 +836,7 @@ def render_insight_panel(title: str, tasks: List[Task], empty_text: str) -> None
         progress = get_progress(task)
         color_class = due_color if due_color in {"red", "orange", "green"} else ""
         cards.append(
-            f"""
+            compact_html(f"""
             <div class="insight-card" title="{task_title}">
                 <div class="insight-task-title">📌 {task_title}</div>
                 <div class="insight-task-meta">👤 {people}</div>
@@ -841,12 +846,12 @@ def render_insight_panel(title: str, tasks: List[Task], empty_text: str) -> None
                     <span class="matrix-badge">進度 {progress}%</span>
                 </div>
             </div>
-            """
+            """)
         )
 
     task_content = "".join(cards) if cards else f'<div class="insight-empty">{html.escape(empty_text)}</div>'
     st.markdown(
-        f"""
+        compact_html(f"""
         <div class="insight-panel">
             <div class="insight-head">
                 <span>{html.escape(title)}</span>
@@ -854,7 +859,7 @@ def render_insight_panel(title: str, tasks: List[Task], empty_text: str) -> None
             </div>
             <div class="insight-scroll">{task_content}</div>
         </div>
-        """,
+        """),
         unsafe_allow_html=True,
     )
 
