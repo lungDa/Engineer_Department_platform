@@ -258,6 +258,32 @@ class UserService:
         return sorted(names)
 
     @staticmethod
+    def get_all_partner_names(preferred_department: str | None = None) -> list[str]:
+        """回傳所有啟用人員，並將指定部門的人員優先排列。"""
+        preferred_department = preferred_department or current_department()
+        preferred = []
+        others = []
+        seen = set()
+        for user in UserService.get_active_users():
+            name = str(user.get("name", "")).strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            target = preferred if UserService.has_department(user, preferred_department) else others
+            target.append(name)
+        return sorted(preferred) + sorted(others)
+
+    @staticmethod
+    def get_partner_names_by_department(department: str) -> list[str]:
+        """回傳主要或兼任指定部門的所有啟用人員。"""
+        names = {
+            str(user.get("name", "")).strip()
+            for user in UserService.get_active_users()
+            if UserService.has_department(user, department)
+        }
+        return sorted(name for name in names if name)
+
+    @staticmethod
     def get_departments() -> list[str]:
         configured = {record_department(u) for u in UserService.load_all() if record_department(u)}
         return [d for d in DEPARTMENTS if d in configured] + [d for d in DEPARTMENTS if d not in configured]
