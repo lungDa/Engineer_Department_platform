@@ -376,14 +376,17 @@ def render_task(task):
 
 
 st.divider()
-categories = list(dict.fromkeys(STATUS_ORDER + [str(task.get("category")) for task in filtered_tasks if task.get("category")]))
-columns = st.columns(len(categories))
-for index, category_name in enumerate(categories):
+# 看板固定為三個等寬欄位；每欄限制高度，超過三張任務卡後在欄內捲動。
+# height 720 約可完整呈現三張一般任務卡（含收合狀態的修改區）。
+BOARD_HEIGHT = 720
+columns = st.columns(3, gap="medium")
+for index, category_name in enumerate(STATUS_ORDER):
     category_tasks = [task for task in filtered_tasks if str(task.get("category")) == category_name]
     category_tasks.sort(key=lambda task: (-priority_score(task), task_due(task), parse_int(task.get("id"), 0)))
     with columns[index]:
         st.subheader(f"{category_name}｜{len(category_tasks)}")
-        if not category_tasks:
-            st.info("目前沒有任務。")
-        for task in category_tasks:
-            render_task(task)
+        with st.container(height=BOARD_HEIGHT, border=True):
+            if not category_tasks:
+                st.info("目前沒有任務。")
+            for task in category_tasks:
+                render_task(task)
