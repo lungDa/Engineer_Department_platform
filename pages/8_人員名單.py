@@ -90,7 +90,7 @@ for department in DEPARTMENTS:
                 "課別": department,
                 "姓名": user.get("name", ""),
                 "帳號／工號": user.get("account", ""),
-                "職務": "、".join(UserService.roles_in_department(user, department)),
+                "本課職務": "、".join(UserService.roles_in_department(user, department)),
                 "最高權限": UserService.effective_role_level(user),
                 "主要／兼任": "主要" if str(user.get("department") or "儀電規劃課") == department else "兼任",
             }
