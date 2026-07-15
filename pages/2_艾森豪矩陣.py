@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 pages/2_艾森豪矩陣.py
-Enterprise Matrix Dashboard V7 Dark KPI
+Enterprise Matrix Dashboard V8 Fixed Quadrant Scroll
 
 修正重點：
 - 任務卡改用 Streamlit 原生元件 + st.progress，避免 HTML 片段外露
@@ -31,9 +31,13 @@ st.set_page_config(
 
 AppInitializer.setup()
 
-APP_VERSION = "Dark KPI"
+APP_VERSION = "V8 Fixed Quadrant Scroll"
 TODAY = date.today()
 Task = Dict[str, Any]
+
+# 四個象限統一使用固定高度；約可完整顯示 3 張任務卡。
+# 第 4 筆以後仍會保留在象限內，使用滑鼠滾輪垂直查看。
+QUADRANT_TASK_VIEW_HEIGHT = 690
 
 
 # ============================================================
@@ -418,6 +422,25 @@ div[data-testid="stVerticalBlockBorderWrapper"]{
 .task-mini-title{font-size:16px;font-weight:900;color:#FFFFFF !important;}
 .task-meta{color:var(--text-muted) !important;font-size:13px;line-height:1.8;}
 
+/* 固定象限內任務卡的視覺節奏，讓四個象限高度一致。 */
+.quadrant-scroll-note{
+    color:var(--text-soft) !important;
+    font-size:12px;
+    margin:2px 0 8px 0;
+}
+
+/* Streamlit height container 的捲軸樣式 */
+div[data-testid="stVerticalBlock"]::-webkit-scrollbar{
+    width:8px;
+}
+div[data-testid="stVerticalBlock"]::-webkit-scrollbar-thumb{
+    background:#475569;
+    border-radius:999px;
+}
+div[data-testid="stVerticalBlock"]::-webkit-scrollbar-track{
+    background:#111827;
+}
+
 /* Inputs */
 .stTextInput input,
 .stTextArea textarea,
@@ -583,11 +606,19 @@ def render_quadrant(icon: str, title: str, subtitle: str, tasks: List[Task]) -> 
         with head_r:
             st.badge(f"{len(tasks)} Tasks", color="blue")
 
-        if not tasks:
-            st.info("目前沒有任務")
-        else:
-            for task in tasks:
-                render_task_card(task)
+        st.markdown(
+            "<div class='quadrant-scroll-note'>固定顯示區約 3 筆任務｜第 4 筆起請在框內使用滾輪查看</div>",
+            unsafe_allow_html=True,
+        )
+
+        # 固定高度的 Streamlit 原生容器會自動產生垂直捲軸。
+        # 不使用 tasks[:3]，所以後續任務不會被省略或遺失。
+        with st.container(height=QUADRANT_TASK_VIEW_HEIGHT, border=False):
+            if not tasks:
+                st.info("目前沒有任務")
+            else:
+                for task in tasks:
+                    render_task_card(task)
 
 
 def render_insight_panel(title: str, tasks: List[Task], empty_text: str) -> None:
