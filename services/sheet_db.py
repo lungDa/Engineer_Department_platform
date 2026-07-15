@@ -50,6 +50,35 @@ def _cached_sheet_records(name: str, columns_json: str, default_rows_json: str, 
     return SheetDB.normalize_records(records, columns)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def _cached_sheet_bundle(specs_json: str, cache_version: int):
+    """Read multiple worksheets with one Google Sheets batch request."""
+    specs = json.loads(specs_json)
+    spreadsheet = SheetDB.spreadsheet()
+    if not spreadsheet:
+        return {}
+    ranges = [f"'{item['name'].replace(chr(39), chr(39)*2)}'!A:ZZ" for item in specs]
+    response = spreadsheet.values_batch_get(ranges)
+    value_ranges = response.get("valueRanges", []) if isinstance(response, dict) else []
+    result = {}
+    for item, payload in zip(specs, value_ranges):
+        columns = item["columns"]
+        values = payload.get("values", []) if isinstance(payload, dict) else []
+        if not values:
+            result[item["name"]] = []
+            continue
+        header = [str(v).strip() for v in values[0]]
+        index_map = {col: header.index(col) for col in columns if col in header}
+        rows = []
+        for raw in values[1:]:
+            row = {col: (raw[idx] if idx < len(raw) else "") for col, idx in index_map.items()}
+            row = {col: row.get(col, "") for col in columns}
+            if any(str(v).strip() for v in row.values()):
+                rows.append(row)
+        result[item["name"]] = SheetDB.normalize_records(rows, columns)
+    return result
+
+
 class SheetDB:
     # V3.4 Enterprise Turbo Edition
     # 依工作表用途分層快取：慢變資料拉長 TTL，熱資料縮短 TTL。
@@ -309,6 +338,26 @@ class SheetDB:
             "stored_at": time.time(),
             "records": records,
         }
+
+    @staticmethod
+    def prefetch(specs: list[tuple[str, list[str], list[dict[str, Any]] | None]]) -> None:
+        """Warm session caches for several worksheets in a single HTTP request."""
+        missing = []
+        version = SheetDB.cache_version()
+        for name, columns, default_rows in specs:
+            if SheetDB.get_session_cached(name, version) is None:
+                missing.append({"name": name, "columns": columns, "default_rows": default_rows or []})
+        if not missing:
+            return
+        try:
+            bundle = _cached_sheet_bundle(json.dumps(missing, ensure_ascii=False, default=str), version)
+            for item in missing:
+                records = bundle.get(item["name"])
+                if records is not None:
+                    SheetDB.set_session_cached(item["name"], records or item["default_rows"])
+        except Exception:
+            # Individual SheetDB.load calls remain the compatibility fallback.
+            return
 
     @staticmethod
     def using_google_sheet() -> bool:

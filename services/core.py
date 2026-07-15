@@ -87,7 +87,9 @@ class AppInitializer:
 
         Streamlit reruns rebuild the DOM, so the CSS must be injected on every run.
         """
-        root = Path(__file__).resolve().parent.parent
+        root = Path(__file__).resolve().parent
+        if root.name == "services":
+            root = root.parent
         css_path = root / "assets" / "enterprise_theme_v1.css"
         try:
             css = css_path.read_text(encoding="utf-8")
@@ -118,6 +120,20 @@ class AppInitializer:
         st.session_state.setdefault("tasks", st.session_state.get("tasks_fallback", []))
         st.session_state.setdefault("meetings", st.session_state.get("meetings_fallback", []))
         st.session_state.setdefault("approvals", st.session_state.get("approvals_fallback", []))
+
+        # One batch request replaces 3-4 serial Google Sheet reads on first page load.
+        prefetch_specs = [
+            (UserService.WORKSHEET_NAME, UserService.COLUMNS, UserService.default_users()),
+            (CategoryService.WORKSHEET_NAME, CategoryService.COLUMNS, CategoryService.default_categories()),
+            (TagService.WORKSHEET_NAME, TagService.COLUMNS, TagService.default_tags()),
+        ]
+        if load_tasks:
+            prefetch_specs.append((TaskService.WORKSHEET_NAME, TaskService.COLUMNS, TaskService.default_tasks()))
+        if load_meetings:
+            prefetch_specs.append((MeetingService.WORKSHEET_NAME, MeetingService.COLUMNS, MeetingService.default_meetings()))
+        if load_approvals:
+            prefetch_specs.append((ApprovalService.WORKSHEET_NAME, ApprovalService.COLUMNS, ApprovalService.default_approvals()))
+        SheetDB.prefetch(prefetch_specs)
 
         users = UserService.get_active_users()
         available_departments = UserService.get_departments() or DEPARTMENTS

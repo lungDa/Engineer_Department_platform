@@ -7,7 +7,7 @@ from config.roles import ROLE_LEVELS
 
 st.set_page_config(page_title="鋒霈_工程一部 管理平台", layout="wide")
 
-AppInitializer.setup()
+AppInitializer.setup(load_tasks=False, load_meetings=False, load_approvals=False)
 ViewComponents.render_public_sidebar()
 
 title_col, dev_col = st.columns([8, 1])
