@@ -127,7 +127,7 @@ class AppInitializer:
             "🏢 選擇部門",
             available_departments,
             key="current_department",
-            help="各功能、任務、人員、會議與簽核資料會依此部門獨立顯示。",
+            help="各功能、任務、人員、會議與簽核資料會依此課別獨立顯示。",
         )
         users = [u for u in users if UserService.has_department(u, current_department())]
         partners = []
@@ -256,6 +256,32 @@ class UserService:
                 seen.add(name)
                 names.append(name)
         return sorted(names)
+
+    @staticmethod
+    def get_all_partner_names(preferred_department: str | None = None) -> list[str]:
+        """回傳所有啟用人員，並將指定部門的人員優先排列。"""
+        preferred_department = preferred_department or current_department()
+        preferred = []
+        others = []
+        seen = set()
+        for user in UserService.get_active_users():
+            name = str(user.get("name", "")).strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            target = preferred if UserService.has_department(user, preferred_department) else others
+            target.append(name)
+        return sorted(preferred) + sorted(others)
+
+    @staticmethod
+    def get_partner_names_by_department(department: str) -> list[str]:
+        """回傳主要或兼任指定部門的所有啟用人員。"""
+        names = {
+            str(user.get("name", "")).strip()
+            for user in UserService.get_active_users()
+            if UserService.has_department(user, department)
+        }
+        return sorted(name for name in names if name)
 
     @staticmethod
     def get_departments() -> list[str]:
@@ -499,8 +525,11 @@ class TaskService:
 
     @staticmethod
     def default_tasks():
-        # 沒有 Google Sheet 任務時維持空白，不建立示範假資料。
-        return []
+        now = now_text()
+        return [
+            {"id": 1, "title": "資料庫設計", "category": "進行中", "due": date.today() + timedelta(days=2), "assignees": ["王大明"], "status": "Active", "progress": 80, "hours_spent": 4.5, "importance": "高", "urgency": "高", "tags": "設計", "notes": "範例：所有任務會寫入本工作表", "depends_on": [], "history": [], "created_by": "系統", "created_account": "system", "created_at": now, "updated_at": now},
+            {"id": 2, "title": "API 開發", "category": "待辦事項", "due": date.today() + timedelta(days=5), "assignees": ["陳小華"], "status": "Active", "progress": 0, "hours_spent": 0.0, "importance": "高", "urgency": "低", "tags": "開發", "notes": "", "depends_on": [], "history": [], "created_by": "系統", "created_account": "system", "created_at": now, "updated_at": now},
+        ]
 
     @staticmethod
     def _from_sheet(row):
@@ -541,49 +570,8 @@ class TaskService:
     @staticmethod
     def save_all(records):
         rows = [TaskService._to_sheet(r) for r in records]
-        ok = SheetDB.save(TaskService.WORKSHEET_NAME, TaskService.COLUMNS, rows)
-        if not ok:
+        if not SheetDB.save(TaskService.WORKSHEET_NAME, TaskService.COLUMNS, rows):
             st.session_state.tasks_fallback = records
-        return bool(ok)
-
-    @staticmethod
-    def update_task(task_id, changes, author="系統"):
-        """以 ID 合併更新單筆任務，避免目前部門資料覆蓋其他部門。"""
-        records = TaskService.load_all()
-        target_id = parse_int(task_id, 0)
-        target = None
-        for row in records:
-            if parse_int(row.get("id", 0), 0) == target_id:
-                target = row
-                break
-        if target is None:
-            raise ValueError("找不到指定任務，可能已被其他使用者刪除或更新。")
-
-        allowed = {
-            "title", "category", "due", "assignees", "status", "progress",
-            "hours_spent", "importance", "urgency", "tags", "notes",
-        }
-        before_category = target.get("category", "")
-        before_progress = parse_int(target.get("progress", 0), 0)
-        for key, value in dict(changes or {}).items():
-            if key in allowed:
-                target[key] = value
-
-        target["progress"] = max(0, min(100, parse_int(target.get("progress", 0), 0)))
-        if target["progress"] >= 100:
-            target["category"] = "已完成"
-        target.setdefault("history", [])
-        if before_progress != target["progress"]:
-            target["history"].append(f"[{datetime.now().strftime('%m-%d %H:%M')}] {author} 將進度由 {before_progress}% 更新為 {target['progress']}%")
-        if before_category != target.get("category"):
-            target["history"].append(f"[{datetime.now().strftime('%m-%d %H:%M')}] {author} 將狀態由「{before_category}」更新為「{target.get('category')}」")
-        target["updated_at"] = now_text()
-
-        if not TaskService.save_all(records):
-            raise RuntimeError(st.session_state.get("sheet_db_error", "Google Sheet 任務更新失敗"))
-        SheetDB.clear_cache(TaskService.WORKSHEET_NAME)
-        st.session_state.tasks = TaskService.load_by_department(current_department())
-        return target
 
     @staticmethod
     def add_task(task, author=None, account=None):

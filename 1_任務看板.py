@@ -1,367 +1,556 @@
 import html
 from datetime import date, datetime
 
-import pandas as pd
 import streamlit as st
-
-from utils import (
-    AppInitializer,
-    SheetDB,
-    TaskService,
-    UserService,
-    current_department,
-    parse_date,
-    parse_float,
-    parse_int,
-)
+from utils import ViewComponents, TaskService, StreamFlowEngine as engine
+from utils import AppInitializer, UserService
 
 
-st.set_page_config(page_title="任務看板｜Enterprise V6", layout="wide")
-AppInitializer.setup(load_tasks=True, load_meetings=False, load_approvals=False)
+# =========================================================
+# V3.6 Enterprise Ultimate Dashboard
+# 任務看板 / Kanban Board
+# =========================================================
 
-STATUS_ORDER = ["待辦事項", "進行中", "已完成"]
-TODAY = date.today()
+st.set_page_config(page_title="任務看板｜V3.6 Enterprise Ultimate Dashboard", layout="wide")
+st.header("📋 任務看板")
+st.caption("V3.6 Enterprise Ultimate Dashboard｜任務發布、指派人員、工作量、進度與風險總覽")
 
-
-def clean_list(value):
-    if isinstance(value, (list, tuple, set)):
-        values = value
-    elif value in (None, ""):
-        return []
-    else:
-        values = str(value).replace("；", ",").replace(";", ",").replace("、", ",").split(",")
-    result = []
-    for item in values:
-        text = str(item).strip()
-        if text and text not in result:
-            result.append(text)
-    return result
+AppInitializer.setup()
 
 
-def task_progress(task):
-    return max(0, min(100, parse_int(task.get("progress", 0), 0)))
-
-
-def task_due(task):
-    return parse_date(task.get("due"), TODAY)
-
-
-def is_completed(task):
-    return task_progress(task) >= 100 or str(task.get("category", "")) == "已完成"
-
-
-def is_overdue(task):
-    return not is_completed(task) and task_due(task) < TODAY
-
-
-def risk_label(task):
-    if is_completed(task):
-        return "✅ 已完成", "ok"
-    days = (task_due(task) - TODAY).days
-    if days < 0:
-        return f"🚨 逾期 {abs(days)} 天", "danger"
-    if days == 0:
-        return "⚠️ 今日截止", "warning"
-    if days <= 3:
-        return f"⚠️ 剩 {days} 天", "warning"
-    return f"⏳ 剩 {days} 天", "ok"
-
-
-def priority_score(task):
-    score = 0
-    if str(task.get("importance", "低")) == "高":
-        score += 2
-    if str(task.get("urgency", "低")) == "高":
-        score += 2
-    if is_overdue(task):
-        score += 5
-    return score
-
-
-def persist_task(task, changes, account, password):
-    ok, message, editor = UserService.authenticate(account, password)
-    if not ok:
-        raise PermissionError(message)
-    editor_name = editor.get("name") or editor.get("account") or account
-    TaskService.update_task(task.get("id"), changes, author=editor_name)
-    return editor_name
-
-
+# =========================================================
+# UI Style
+# =========================================================
 st.markdown(
     """
     <style>
-    .task-card {border:1px solid rgba(148,163,184,.28);border-radius:16px;padding:14px 15px;
-      background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
-      box-shadow:0 8px 24px rgba(15,23,42,.12);margin-bottom:10px}
-    .task-title {font-size:1.02rem;font-weight:800;line-height:1.35;margin-bottom:8px}
-    .task-meta {font-size:.82rem;color:#94a3b8;margin:5px 0}
-    .chip {display:inline-block;border-radius:999px;padding:3px 8px;margin:2px 3px 2px 0;
-      font-size:.75rem;font-weight:700;background:rgba(59,130,246,.14);border:1px solid rgba(59,130,246,.28)}
-    .chip.danger {background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.30);color:#ef4444}
-    .chip.warning {background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.30);color:#f59e0b}
-    .chip.ok {background:rgba(34,197,94,.14);border-color:rgba(34,197,94,.30);color:#22c55e}
-    .progress-bg {height:8px;border-radius:99px;background:rgba(148,163,184,.22);overflow:hidden;margin-top:9px}
-    .progress-fg {height:8px;border-radius:99px;background:linear-gradient(90deg,#2563eb,#22c55e)}
+    .v36-dashboard-card {
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 16px;
+        padding: 14px 16px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+        margin-bottom: 12px;
+    }
+    .v36-title {
+        font-size: 1.03rem;
+        font-weight: 800;
+        margin-bottom: 8px;
+        line-height: 1.35;
+    }
+    .v36-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        margin: 3px 4px 3px 0;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        background: rgba(30, 41, 59, 0.08);
+    }
+    .v36-assignee {
+        background: rgba(37, 99, 235, 0.14);
+        color: #2563eb;
+        border-color: rgba(37, 99, 235, 0.28);
+    }
+    .v36-assignee-more {
+        background: rgba(100, 116, 139, 0.14);
+        color: #64748b;
+        border-color: rgba(100, 116, 139, 0.28);
+    }
+    .v36-priority-high {
+        background: rgba(239, 68, 68, 0.14);
+        color: #dc2626;
+        border-color: rgba(239, 68, 68, 0.28);
+    }
+    .v36-priority-medium {
+        background: rgba(245, 158, 11, 0.14);
+        color: #d97706;
+        border-color: rgba(245, 158, 11, 0.28);
+    }
+    .v36-priority-low {
+        background: rgba(34, 197, 94, 0.14);
+        color: #16a34a;
+        border-color: rgba(34, 197, 94, 0.28);
+    }
+    .v36-risk-overdue {
+        background: rgba(239, 68, 68, 0.14);
+        color: #dc2626;
+        border-color: rgba(239, 68, 68, 0.28);
+    }
+    .v36-risk-soon {
+        background: rgba(245, 158, 11, 0.14);
+        color: #d97706;
+        border-color: rgba(245, 158, 11, 0.28);
+    }
+    .v36-risk-normal {
+        background: rgba(34, 197, 94, 0.14);
+        color: #16a34a;
+        border-color: rgba(34, 197, 94, 0.28);
+    }
+    .v36-meta {
+        color: #64748b;
+        font-size: 12px;
+        margin-top: 6px;
+        margin-bottom: 6px;
+    }
+    .v36-section-title {
+        font-weight: 800;
+        margin: 10px 0 4px 0;
+        color: #334155;
+    }
+    .v36-mini-bar-wrap {
+        width: 100%;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.20);
+        overflow: hidden;
+        margin-top: 8px;
+    }
+    .v36-mini-bar {
+        height: 8px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #2563eb, #22c55e);
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-title_col, refresh_col = st.columns([8, 1])
-with title_col:
-    st.header("📋 任務看板｜Enterprise V6")
-    st.caption(f"目前部門：{current_department()}｜任務新增、進度回報、風險與人員負載整合管理")
-with refresh_col:
-    st.write("")
-    if st.button("🔄 重新整理", width="stretch"):
-        SheetDB.clear_cache("Tasks")
-        st.session_state.tasks = TaskService.load_by_department(current_department())
+
+# =========================================================
+# Helper Functions
+# =========================================================
+def _safe_text(value, default=""):
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text if text else default
+
+
+def _escape(value):
+    return html.escape(_safe_text(value))
+
+
+def _parse_assignees(value):
+    """相容 list / tuple / set / comma string / semicolon string."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        raw_items = list(value)
+    else:
+        raw = str(value).replace("；", ",").replace(";", ",").replace("、", ",")
+        raw_items = raw.split(",")
+    result = []
+    for item in raw_items:
+        name = str(item).strip()
+        if name and name not in result:
+            result.append(name)
+    return result
+
+
+def _parse_tags(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        raw_items = list(value)
+    else:
+        raw = str(value).replace("；", ",").replace(";", ",").replace("、", ",")
+        raw_items = raw.split(",")
+    return [str(x).strip() for x in raw_items if str(x).strip()]
+
+
+def _parse_date(value):
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = _safe_text(value)
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%Y.%m.%d"):
+        try:
+            return datetime.strptime(text[:10], fmt).date()
+        except Exception:
+            pass
+    try:
+        return datetime.fromisoformat(text[:10]).date()
+    except Exception:
+        return None
+
+
+def _days_left(due_value):
+    due_date = _parse_date(due_value)
+    if due_date is None:
+        return None
+    return (due_date - date.today()).days
+
+
+def _risk_chip(days_left, progress):
+    if progress >= 100:
+        return '<span class="v36-chip v36-risk-normal">✅ 已完成</span>'
+    if days_left is None:
+        return '<span class="v36-chip v36-assignee-more">🗓️ 未設定日期</span>'
+    if days_left < 0:
+        return f'<span class="v36-chip v36-risk-overdue">🚨 逾期 {abs(days_left)} 天</span>'
+    if days_left <= 3:
+        return f'<span class="v36-chip v36-risk-soon">⚠️ 剩 {days_left} 天</span>'
+    return f'<span class="v36-chip v36-risk-normal">⏳ 剩 {days_left} 天</span>'
+
+
+def _priority_text(task):
+    imp = _safe_text(task.get("importance"), "低")
+    urg = _safe_text(task.get("urgency"), "低")
+    if imp == "高" and urg == "高":
+        return "High", "v36-priority-high", "🔥"
+    if imp == "高" or urg == "高":
+        return "Medium", "v36-priority-medium", "⚡"
+    return "Low", "v36-priority-low", "🟢"
+
+
+def _render_assignee_chips(assignees, max_visible=4):
+    if not assignees:
+        return '<span class="v36-chip v36-assignee-more">👤 未指派</span>'
+
+    chips = []
+    full_list = "、".join(assignees)
+    for name in assignees[:max_visible]:
+        safe_name = _escape(name)
+        initial = safe_name[0] if safe_name else "?"
+        chips.append(
+            f'<span class="v36-chip v36-assignee" title="{html.escape(full_list)}">👤 {initial}｜{safe_name}</span>'
+        )
+    if len(assignees) > max_visible:
+        chips.append(
+            f'<span class="v36-chip v36-assignee-more" title="{html.escape(full_list)}">+{len(assignees) - max_visible}</span>'
+        )
+    return "".join(chips)
+
+
+def _render_tag_chips(tags, max_visible=4):
+    if not tags:
+        return ""
+    chips = []
+    for tag in tags[:max_visible]:
+        chips.append(f'<span class="v36-chip">🏷️ {_escape(tag)}</span>')
+    if len(tags) > max_visible:
+        chips.append(f'<span class="v36-chip v36-assignee-more">+{len(tags) - max_visible}</span>')
+    return "".join(chips)
+
+
+def _task_progress(task):
+    try:
+        return max(0, min(100, int(float(task.get("progress", 0)))))
+    except Exception:
+        return 0
+
+
+def _render_task_card(task, category_index, is_locked, locked_by):
+    title = _escape(task.get("title", "未命名任務"))
+    progress = _task_progress(task)
+    assignees = _parse_assignees(task.get("assignees"))
+    tags = _parse_tags(task.get("tags"))
+    days = _days_left(task.get("due"))
+    priority_label, priority_class, priority_icon = _priority_text(task)
+    locked_icon = "🔒" if is_locked else "📌"
+
+    assignee_html = _render_assignee_chips(assignees)
+    tag_html = _render_tag_chips(tags)
+    risk_html = _risk_chip(days, progress)
+    due_text = _escape(task.get("due", "未設定"))
+    hours = _escape(task.get("hours_spent", 0))
+
+    card_html = f"""
+    <div class="v36-dashboard-card">
+        <div class="v36-title">{locked_icon} {title}</div>
+        <div>{assignee_html}</div>
+        <div class="v36-meta">📅 {due_text}　|　⏱️ 累計工時：{hours} h</div>
+        <div>
+            <span class="v36-chip {priority_class}">{priority_icon} {priority_label}</span>
+            {risk_html}
+        </div>
+        <div class="v36-mini-bar-wrap">
+            <div class="v36-mini-bar" style="width:{progress}%;"></div>
+        </div>
+        <div class="v36-meta">📊 完成度：{progress}%</div>
+        <div>{tag_html}</div>
+    </div>
+    """
+    st.markdown(card_html, unsafe_allow_html=True)
+
+    if is_locked:
+        st.error(f"等待前置：{', '.join(locked_by)}")
+
+    with st.expander("📝 詳細設定與回報"):
+        st.markdown("**👥 指派人員**")
+        if assignees:
+            st.info("、".join(assignees))
+        else:
+            st.warning("此任務尚未指定人員。")
+
+        new_imp = st.selectbox(
+            "重要度",
+            ["高", "低"],
+            index=0 if task.get("importance") == "高" else 1,
+            key=f"imp_{task['id']}",
+        )
+
+        new_urg = st.selectbox(
+            "緊急度",
+            ["高", "低"],
+            index=0 if task.get("urgency") == "高" else 1,
+            key=f"urg_{task['id']}",
+        )
+
+        task["importance"] = new_imp
+        task["urgency"] = new_urg
+
+        new_prog = st.slider(
+            "完成進度 (%)",
+            0,
+            100,
+            progress,
+            key=f"prog_{task['id']}",
+        )
+
+        if new_prog != task.get("progress"):
+            task["progress"] = new_prog
+            engine.add_log(task, f"將進度更新為 {new_prog}%")
+
+        add_h = st.number_input(
+            "➕ 新增本次花費工時",
+            min_value=0.0,
+            step=0.5,
+            key=f"add_h_{task['id']}",
+        )
+
+        if st.button("紀錄工時", key=f"btn_h_{task['id']}") and add_h > 0:
+            task["hours_spent"] = task.get("hours_spent", 0) + add_h
+            engine.add_log(task, f"紀錄了 {add_h} 小時，總計 {task['hours_spent']} 小時")
+            st.rerun()
+
+        task["notes"] = st.text_area(
+            "備註",
+            value=task.get("notes", ""),
+            key=f"note_{task['id']}",
+        )
+
+        st.markdown("**📜 活動軌跡**")
+        with st.container(height=100):
+            for log in reversed(task.get("history", [])):
+                st.caption(log)
+
+    new_status = st.selectbox(
+        "變更狀態",
+        st.session_state.categories,
+        index=category_index,
+        key=f"move_{task['id']}",
+        disabled=is_locked,
+    )
+
+    if new_status != task["category"] and not is_locked:
+        engine.add_log(task, f"將狀態從「{task['category']}」移至「{new_status}」")
+        task["category"] = new_status
         st.rerun()
 
-tasks = [task for task in st.session_state.get("tasks", []) if task.get("status", "Active") == "Active"]
-partner_names = UserService.get_partner_names()
-
 
 # =========================================================
-# 新增任務
+# Quick Create Task
 # =========================================================
-with st.expander("➕ 新增任務", expanded=not tasks):
-    if not partner_names:
-        st.warning("目前部門沒有人員名單。請先在人員名單新增主要或兼任此部門的人員。")
+with st.expander("📝 快速建立任務", expanded=False):
+    all_people = UserService.get_all_partner_names()
+    st.caption("目前部門人員會排在最上方，其餘部門人員也可選擇。")
+    quick_col, dept_col, all_col, clear_col = st.columns([2.4, 1, 1, 1])
+    with quick_col:
+        quick_department = st.selectbox("快速選取部門", UserService.get_departments(), key="legacy_task_quick_department")
+    with dept_col:
+        st.write("")
+        if st.button("選取該部門全員", key="legacy_task_select_department", width="stretch"):
+            selected = st.session_state.get("legacy_task_assignees", [])
+            names = UserService.get_partner_names_by_department(quick_department)
+            st.session_state.legacy_task_assignees = list(dict.fromkeys(selected + names))
+            st.rerun()
+    with all_col:
+        st.write("")
+        if st.button("選取所有人", key="legacy_task_select_all", width="stretch"):
+            st.session_state.legacy_task_assignees = all_people
+            st.rerun()
+    with clear_col:
+        st.write("")
+        if st.button("清除選取", key="legacy_task_clear_all", width="stretch"):
+            st.session_state.legacy_task_assignees = []
+            st.rerun()
 
-    with st.form("enterprise_add_task", clear_on_submit=True):
-        auth1, auth2 = st.columns(2)
-        with auth1:
-            creator_account = st.text_input("建立人帳號／工號")
-        with auth2:
-            creator_password = st.text_input("建立人密碼", type="password")
+    with st.form("task_board_quick_add_task_form", clear_on_submit=True):
+        publisher_account = st.text_input("發布人工號 / 帳號")
+        publisher_password = st.text_input("發布人密碼", type="password")
+        t_title = st.text_input("任務名稱")
 
-        title = st.text_input("任務名稱")
-        c1, c2, c3 = st.columns([1.1, 1.1, 2])
+        c1, c2, c3 = st.columns([1.2, 1.2, 2])
         with c1:
-            category = st.selectbox("任務狀態", STATUS_ORDER[:-1])
+            t_cat = st.selectbox("分類", st.session_state.categories)
         with c2:
-            due = st.date_input("截止日期", TODAY)
+            t_due = st.date_input("排程日期", st.session_state.selected_date)
         with c3:
-            assignees = st.multiselect("指派人員", partner_names)
+            t_assign = st.multiselect("👥 指派（可跨部門）", all_people, key="legacy_task_assignees")
 
-        p1, p2, p3 = st.columns(3)
-        with p1:
-            importance = st.selectbox("重要度", ["高", "低"], index=1)
-        with p2:
-            urgency = st.selectbox("緊急度", ["高", "低"], index=1)
-        with p3:
-            estimated_tags = st.text_input("標籤", placeholder="設計, 採購, 現場")
-        notes = st.text_area("任務說明／備註")
+        if t_assign:
+            st.info("👥 本次將指派給：\n\n" + "\n".join(f"• {name}" for name in t_assign))
+        else:
+            st.warning("尚未指定任何人。")
+
+        c4, c5 = st.columns(2)
+        with c4:
+            t_imp = st.selectbox("重要度", ["高", "低"])
+        with c5:
+            t_urg = st.selectbox("緊急度", ["高", "低"])
 
         submitted = st.form_submit_button("建立任務", width="stretch")
         if submitted:
-            if not creator_account.strip() or not creator_password:
-                st.error("請輸入建立人的帳號與密碼。")
-            elif not title.strip():
-                st.error("請輸入任務名稱。")
-            elif not assignees:
-                st.error("請至少指派一位目前部門人員。")
+            if not publisher_account.strip() or not publisher_password:
+                st.warning("請輸入發布人的工號與密碼。")
+            elif not t_title.strip():
+                st.warning("請輸入任務名稱。")
+            elif not t_assign:
+                st.warning("請至少指定一位人員。")
             else:
-                ok, message, creator = UserService.authenticate(creator_account, creator_password)
+                ok, msg, publisher = UserService.authenticate(publisher_account, publisher_password)
                 if not ok:
-                    st.error(message)
+                    st.error(msg)
                 else:
-                    creator_name = creator.get("name") or creator_account
-                    new_task = {
-                        "title": title.strip(), "category": category, "due": due,
-                        "assignees": assignees, "status": "Active", "progress": 0,
-                        "hours_spent": 0.0, "department": current_department(),
-                        "importance": importance, "urgency": urgency,
-                        "tags": ",".join(clean_list(estimated_tags)), "notes": notes.strip(),
-                        "depends_on": [], "history": [f"[{datetime.now().strftime('%m-%d %H:%M')}] {creator_name} 建立任務"],
+                    author = publisher.get("name") or publisher.get("account") or publisher_account
+                    account = publisher.get("account") or publisher_account
+                    new_t = {
+                        "title": t_title,
+                        "category": t_cat,
+                        "due": t_due,
+                        "assignees": t_assign,
+                        "status": "Active",
+                        "progress": 0,
+                        "hours_spent": 0.0,
+                        "importance": t_imp,
+                        "urgency": t_urg,
+                        "tags": "",
+                        "notes": "",
+                        "depends_on": [],
+                        "history": [],
                     }
+                    engine.add_log(new_t, "透過任務看板快速建立任務", author=author)
                     try:
-                        TaskService.add_task(new_task, author=creator_name, account=creator.get("account", creator_account))
-                        SheetDB.clear_cache("Tasks")
-                        st.success("任務已建立並寫入 Google Sheet。")
+                        TaskService.add_task(new_t, author=author, account=account)
+                        st.success(f"任務已建立並寫入 Google Sheet。發布人：{author}")
                         st.rerun()
-                    except Exception as exc:
-                        st.error(f"任務建立失敗：{exc}")
+                    except Exception as e:
+                        st.error(f"任務寫入 Google Sheet 失敗：{e}")
+                        if st.session_state.get("sheet_db_error"):
+                            with st.expander("Google Sheet 寫入錯誤詳情", expanded=False):
+                                st.code(str(st.session_state.get("sheet_db_error")), language="text")
 
 
 # =========================================================
-# KPI
+# Dashboard KPI
 # =========================================================
-total = len(tasks)
-completed = sum(is_completed(task) for task in tasks)
-overdue = sum(is_overdue(task) for task in tasks)
-in_progress = sum(str(task.get("category")) == "進行中" and not is_completed(task) for task in tasks)
-average = round(sum(task_progress(task) for task in tasks) / total, 1) if total else 0
+tasks = st.session_state.get("tasks", [])
+total_tasks = len(tasks)
+completed_tasks = sum(1 for t in tasks if _task_progress(t) >= 100)
+active_tasks = max(total_tasks - completed_tasks, 0)
+overdue_tasks = sum(1 for t in tasks if (_days_left(t.get("due")) is not None and _days_left(t.get("due")) < 0 and _task_progress(t) < 100))
+avg_progress = round(sum(_task_progress(t) for t in tasks) / total_tasks, 1) if total_tasks else 0
 
 k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("部門任務", total)
-k2.metric("進行中", in_progress)
-k3.metric("已完成", completed)
-k4.metric("逾期", overdue)
-k5.metric("平均進度", f"{average}%")
-
+k1.metric("總任務", total_tasks)
+k2.metric("進行中", active_tasks)
+k3.metric("已完成", completed_tasks)
+k4.metric("逾期", overdue_tasks)
+k5.metric("平均進度", f"{avg_progress}%")
 
 # =========================================================
-# 篩選與負載
+# Workload Dashboard
 # =========================================================
-with st.expander("🔍 篩選與人員負載", expanded=False):
-    f1, f2, f3, f4 = st.columns(4)
-    with f1:
-        keyword = st.text_input("搜尋", placeholder="任務、備註、標籤")
-    with f2:
-        selected_people = st.multiselect("指派人員", partner_names)
-    with f3:
-        selected_priority = st.multiselect("重要／緊急", ["重要", "緊急", "重要且緊急"])
-    with f4:
-        risk_filter = st.selectbox("期限風險", ["全部", "逾期", "3 天內", "未完成", "已完成"])
+with st.expander("👥 人員工作量總覽", expanded=False):
+    workload = {}
+    for task in tasks:
+        for person in _parse_assignees(task.get("assignees")):
+            workload.setdefault(person, {"total": 0, "active": 0, "overdue": 0})
+            workload[person]["total"] += 1
+            if _task_progress(task) < 100:
+                workload[person]["active"] += 1
+            days = _days_left(task.get("due"))
+            if days is not None and days < 0 and _task_progress(task) < 100:
+                workload[person]["overdue"] += 1
 
-    workload = []
-    for person in partner_names:
-        owned = [task for task in tasks if person in clean_list(task.get("assignees"))]
-        workload.append({
-            "人員": person,
-            "全部任務": len(owned),
-            "未完成": sum(not is_completed(task) for task in owned),
-            "逾期": sum(is_overdue(task) for task in owned),
-            "平均進度": f"{round(sum(task_progress(task) for task in owned) / len(owned), 1) if owned else 0}%",
-        })
     if workload:
-        st.dataframe(pd.DataFrame(workload), width="stretch", hide_index=True)
+        rows = []
+        for person, data in sorted(workload.items(), key=lambda item: item[1]["active"], reverse=True):
+            rows.append(
+                {
+                    "人員": person,
+                    "總任務": data["total"],
+                    "進行中": data["active"],
+                    "逾期": data["overdue"],
+                }
+            )
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+    else:
+        st.info("目前沒有可統計的指派資料。")
 
 
-def matches_filters(task):
-    if keyword.strip():
-        haystack = " ".join([
-            str(task.get("title", "")), str(task.get("notes", "")),
-            str(task.get("tags", "")), " ".join(clean_list(task.get("assignees"))),
-        ]).lower()
-        if keyword.strip().lower() not in haystack:
-            return False
-    if selected_people and not set(selected_people).intersection(clean_list(task.get("assignees"))):
-        return False
-    imp = str(task.get("importance", "低")) == "高"
-    urg = str(task.get("urgency", "低")) == "高"
-    if selected_priority:
-        flags = set()
-        if imp:
-            flags.add("重要")
-        if urg:
-            flags.add("緊急")
-        if imp and urg:
-            flags.add("重要且緊急")
-        if not flags.intersection(selected_priority):
-            return False
-    days = (task_due(task) - TODAY).days
-    if risk_filter == "逾期" and not is_overdue(task):
-        return False
-    if risk_filter == "3 天內" and not (not is_completed(task) and 0 <= days <= 3):
-        return False
-    if risk_filter == "未完成" and is_completed(task):
-        return False
-    if risk_filter == "已完成" and not is_completed(task):
-        return False
-    return True
+# =========================================================
+# Advanced Filters
+# =========================================================
+f_assignees, f_tags = ViewComponents.render_filters()
+
+with st.expander("🛠️ 看板設定（新增分類）"):
+    new_cat = st.text_input("自訂新分類/欄位名稱")
+
+    if st.button("建立欄位") and new_cat and new_cat not in st.session_state.categories:
+        st.session_state.categories.append(new_cat)
+        st.rerun()
 
 
-filtered_tasks = [task for task in tasks if matches_filters(task)]
+# =========================================================
+# Kanban Board
+# =========================================================
+categories = st.session_state.get("categories", [])
+if not categories:
+    st.warning("尚未設定任何看板分類。")
+    st.stop()
 
+cols = st.columns(len(categories))
 
-def render_task(task):
-    progress = task_progress(task)
-    assignees = clean_list(task.get("assignees"))
-    tags = clean_list(task.get("tags"))
-    risk_text, risk_class = risk_label(task)
-    chips = "".join(f'<span class="chip">👤 {html.escape(name)}</span>' for name in assignees)
-    tag_chips = "".join(f'<span class="chip">🏷️ {html.escape(tag)}</span>' for tag in tags)
-    title = html.escape(str(task.get("title") or "未命名任務"))
-    due_text = task_due(task).strftime("%Y-%m-%d")
-    task_id = parse_int(task.get("id"), 0)
+for idx, col in enumerate(cols):
+    cat_name = categories[idx]
 
-    st.markdown(
-        f"""
-        <div class="task-card">
-          <div class="task-title">📌 {title}</div>
-          <div>{chips or '<span class="chip">未指派</span>'}</div>
-          <div class="task-meta">📅 {due_text}　｜　⏱️ {parse_float(task.get('hours_spent'), 0):.1f} 小時</div>
-          <span class="chip {risk_class}">{risk_text}</span>
-          <span class="chip">重要：{html.escape(str(task.get('importance', '低')))}</span>
-          <span class="chip">緊急：{html.escape(str(task.get('urgency', '低')))}</span>
-          <div class="progress-bg"><div class="progress-fg" style="width:{progress}%"></div></div>
-          <div class="task-meta">進度 {progress}%</div>
-          <div>{tag_chips}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    with col:
+        raw_cat_tasks = [t for t in tasks if t.get("category") == cat_name]
+        cat_tasks = TaskService.get_filtered_tasks(f_assignees, f_tags, raw_cat_tasks)
 
-    with st.expander("✏️ 修改任務／回報進度"):
-        current_category = str(task.get("category") or "待辦事項")
-        category_options = list(dict.fromkeys(STATUS_ORDER + st.session_state.get("categories", [])))
-        current_people = list(dict.fromkeys(partner_names + assignees))
-        with st.form(f"edit_task_{task_id}"):
-            editor1, editor2 = st.columns(2)
-            with editor1:
-                editor_account = st.text_input("修改人帳號／工號", key=f"editor_account_{task_id}")
-            with editor2:
-                editor_password = st.text_input("修改人密碼", type="password", key=f"editor_password_{task_id}")
+        done_count = sum(1 for t in cat_tasks if _task_progress(t) >= 100)
+        overdue_count = sum(
+            1
+            for t in cat_tasks
+            if (_days_left(t.get("due")) is not None and _days_left(t.get("due")) < 0 and _task_progress(t) < 100)
+        )
 
-            edit_title = st.text_input("任務名稱", value=str(task.get("title", "")))
-            e1, e2 = st.columns(2)
-            with e1:
-                edit_category = st.selectbox(
-                    "任務狀態", category_options,
-                    index=category_options.index(current_category) if current_category in category_options else 0,
-                )
-                edit_due = st.date_input("截止日期", task_due(task))
-                edit_progress = st.slider("完成進度", 0, 100, progress, step=5)
-            with e2:
-                edit_assignees = st.multiselect("指派人員", current_people, default=assignees)
-                edit_importance = st.selectbox("重要度", ["高", "低"], index=0 if task.get("importance") == "高" else 1)
-                edit_urgency = st.selectbox("緊急度", ["高", "低"], index=0 if task.get("urgency") == "高" else 1)
-            edit_tags = st.text_input("標籤", value=",".join(tags))
-            edit_notes = st.text_area("備註", value=str(task.get("notes", "")))
-            add_hours = st.number_input("本次新增工時", min_value=0.0, step=0.5, value=0.0)
+        st.markdown(f"#### 📁 {cat_name}")
+        st.caption(f"{len(cat_tasks)} 件｜完成 {done_count} 件｜逾期 {overdue_count} 件")
+        st.divider()
 
-            if st.form_submit_button("儲存修改", width="stretch"):
-                if not editor_account.strip() or not editor_password:
-                    st.error("請輸入修改人的帳號與密碼。")
-                elif not edit_title.strip():
-                    st.error("任務名稱不可空白。")
-                elif not edit_assignees:
-                    st.error("請至少保留一位指派人員。")
-                else:
-                    changes = {
-                        "title": edit_title.strip(), "category": edit_category,
-                        "due": edit_due, "assignees": edit_assignees,
-                        "progress": edit_progress,
-                        "hours_spent": parse_float(task.get("hours_spent"), 0) + add_hours,
-                        "importance": edit_importance, "urgency": edit_urgency,
-                        "tags": ",".join(clean_list(edit_tags)), "notes": edit_notes.strip(),
-                    }
-                    try:
-                        editor_name = persist_task(task, changes, editor_account, editor_password)
-                        st.success(f"任務已更新。修改人：{editor_name}")
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"任務更新失敗：{exc}")
+        if not cat_tasks:
+            st.info("此欄位目前沒有任務。")
+            continue
 
-        history = task.get("history") or []
-        if history:
-            with st.expander("📜 活動紀錄"):
-                for item in reversed(history[-20:]):
-                    st.caption(str(item))
+        # 企業版排序：逾期 > 高優先 > 日期近 > 其他
+        def sort_key(task):
+            days = _days_left(task.get("due"))
+            priority_label, _, _ = _priority_text(task)
+            priority_rank = {"High": 0, "Medium": 1, "Low": 2}.get(priority_label, 3)
+            overdue_rank = 0 if days is not None and days < 0 and _task_progress(task) < 100 else 1
+            day_rank = days if days is not None else 9999
+            return (overdue_rank, priority_rank, day_rank)
 
-
-st.divider()
-categories = list(dict.fromkeys(STATUS_ORDER + [str(task.get("category")) for task in filtered_tasks if task.get("category")]))
-columns = st.columns(len(categories))
-for index, category_name in enumerate(categories):
-    category_tasks = [task for task in filtered_tasks if str(task.get("category")) == category_name]
-    category_tasks.sort(key=lambda task: (-priority_score(task), task_due(task), parse_int(task.get("id"), 0)))
-    with columns[index]:
-        st.subheader(f"{category_name}｜{len(category_tasks)}")
-        if not category_tasks:
-            st.info("目前沒有任務。")
-        for task in category_tasks:
-            render_task(task)
+        for t in sorted(cat_tasks, key=sort_key):
+            is_locked, locked_by = TaskService.is_task_locked(t)
+            _render_task_card(t, idx, is_locked, locked_by)
