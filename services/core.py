@@ -124,7 +124,7 @@ class AppInitializer:
         if st.session_state.get("current_department") not in available_departments:
             st.session_state.current_department = available_departments[0]
         st.sidebar.selectbox(
-            "🏢 選擇課別",
+            "🏢 選擇部門",
             available_departments,
             key="current_department",
             help="各功能、任務、人員、會議與簽核資料會依此課別獨立顯示。",
