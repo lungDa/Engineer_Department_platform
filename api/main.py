@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from api.middleware.cors import setup_cors
 from api.middleware.logging import request_logging_middleware
-from api.routers import announcements, health, line, notifications, system, tasks, users
+from api.routers import announcements, health, line, m365_sync, notifications, system, tasks, users
 from config.settings import get_settings
 from shared.logger import get_logger
 
@@ -27,6 +27,7 @@ def create_app() -> FastAPI:
     app.include_router(announcements.router)
     app.include_router(line.router)
     app.include_router(notifications.router)
+    app.include_router(m365_sync.router)
 
     @app.on_event("startup")
     async def startup_event():
