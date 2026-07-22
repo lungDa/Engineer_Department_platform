@@ -1,6 +1,7 @@
 import streamlit as st
 
 from services.diagnostics_service import DiagnosticsService
+from services.teams_service import teams_service
 from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDB
 from config.departments import DEPARTMENTS
 from config.roles import ROLE_LEVELS
@@ -114,6 +115,37 @@ def render_enterprise_diagnostics():
         f1.metric("Teams Flow", "READY" if features.get("teams_channel_notification") else "OFF")
         f2.metric("Outlook Flow", "READY" if features.get("outlook_send_mail") else "OFF")
         f3.metric("事件觸發", "已接上" if features.get("event_triggers_connected") else "下一階段")
+
+        st.write("---")
+        st.markdown("##### 🧪 Teams 通知測試")
+        st.caption("按下按鈕後，平台會透過目前設定的 Power Automate Webhook 傳送一則測試訊息。")
+
+        if not m365["teams_configured"]:
+            st.warning("TEAMS_WEBHOOK_URL 尚未設定，無法發送測試通知。")
+        elif st.button(
+            "📨 發送 Teams 測試通知",
+            key="send_teams_test_notification",
+            width="stretch",
+        ):
+            with st.spinner("正在傳送 Teams 測試通知..."):
+                result = teams_service.send(
+                    title="工程一部管理平台｜Teams 連線測試",
+                    message="Teams Webhook 已成功連接工程一部管理平台。",
+                    level="success",
+                    facts={
+                        "測試項目": "Power Automate → Teams",
+                        "執行位置": "開發者診斷中心",
+                    },
+                )
+
+            if result.get("ok"):
+                status_code = (result.get("data") or {}).get("status_code")
+                st.success(
+                    f"Teams 測試通知已送出（HTTP {status_code}），請到指定的 Teams 頻道確認。"
+                )
+            else:
+                st.error(result.get("message") or "Teams 測試通知發送失敗。")
+                st.info("請確認 Power Automate 工作流程已啟用，且 Webhook 連結仍然有效。")
 
     with tab_line:
         line = report["line"]
