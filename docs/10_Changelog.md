@@ -1,5 +1,11 @@
 # 10 Changelog
 
+## V5.5.3 Microsoft 365 Migration Baseline
+- 統一執行環境、部署設定、介面及文件的目前版本標示
+- 移除未被引用的根目錄舊版 `task_board.py`
+- 修正重複程式整理紀錄，使其與實際專案內容一致
+- 八個正式功能頁及既有 Google Sheet 功能維持不變
+
 ## V5.5.3 Independent Developer Account
 - 開發者改為系統獨立帳號，不歸屬任何課別
 - 開發者不出現在課別名單、人員指派選單及課別人數

@@ -8,4 +8,4 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: APP_VERSION
-        value: V5.1.1 Enterprise Diagnostics Center
+        value: V5.5.3 Microsoft 365 Migration Baseline

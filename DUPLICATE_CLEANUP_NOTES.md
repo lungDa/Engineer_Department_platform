@@ -1,4 +1,4 @@
-# 重複程式整理紀錄
+# V5.5.3 Microsoft 365 Migration Baseline 重複程式整理紀錄
 
 本版以資料夾內模組為唯一程式來源。
 
@@ -18,6 +18,7 @@
 
 所有既有 import 已確認使用 `services.core`，不需改寫。
 Streamlit 多頁功能會從 `pages/` 資料夾載入頁面。
+本基準修正版已再次確認根目錄 `task_board.py` 未被引用，並完成實際移除。
 
 ## 效能調整
 

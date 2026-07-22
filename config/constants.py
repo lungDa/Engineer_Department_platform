@@ -1,7 +1,7 @@
-# V5.1.1 Enterprise Diagnostics Center constants
+# V5.5.3 Microsoft 365 Migration Baseline constants
 
 APP_TITLE = "開發工程部平台"
-APP_VERSION = "V5.1.1 Enterprise Diagnostics Center"
+APP_VERSION = "V5.5.3 Microsoft 365 Migration Baseline"
 
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
 DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M"

@@ -79,7 +79,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V5.5.3 Independent Developer Account"
+    VERSION = "V5.5.3 Microsoft 365 Migration Baseline"
 
     @staticmethod
     def load_enterprise_theme():

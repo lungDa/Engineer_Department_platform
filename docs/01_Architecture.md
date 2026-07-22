@@ -44,7 +44,7 @@ API-->LINE
 
 ## Current Version
 
-- V5.1.1 Enterprise Diagnostics Center
+- V5.5.3 Microsoft 365 Migration Baseline
 - Streamlit + FastAPI dual service
 - Repository Pattern
 - Enterprise Diagnostics

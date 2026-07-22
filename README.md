@@ -20,7 +20,7 @@ V5.3.0 新增 11 個工程課別。側邊欄先選擇課別後，任務、行事
 
 目前版本：
 
-**V5.1.1 Enterprise Diagnostics Center**
+**V5.5.3 Microsoft 365 Migration Baseline**
 
 ## 已完成功能
 
@@ -197,7 +197,7 @@ Developer Mode 可檢查：
 
 | Version | Status |
 |----------|--------|
-| V5.1.1 Enterprise Diagnostics | ✅ |
+| V5.5.3 Microsoft 365 Migration Baseline | ✅ Current Baseline |
 | V5.1.2 LINE User Binding | Planned |
 | V5.2 AI Assistant | Planned |
 | V5.3 Gmail & Calendar | Planned |
