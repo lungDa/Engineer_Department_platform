@@ -26,10 +26,12 @@ class UserRepository(BaseRepository):
         )
         return records if records is not None else st.session_state.get("user_records_fallback", self.default_rows())
 
-    def save_all(self, records: list[dict]) -> None:
+    def save_all(self, records: list[dict]) -> bool:
         records = sheet_repository.normalize_records(records, self.columns)
-        if not sheet_repository.save_records(self.worksheet_name, self.columns, records):
+        ok = sheet_repository.save_records(self.worksheet_name, self.columns, records)
+        if not ok:
             st.session_state.user_records_fallback = records
+        return ok
 
     def query(
         self,
