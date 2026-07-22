@@ -1,5 +1,14 @@
 # 10 Changelog
 
+## V5.6.0 Microsoft 365 Notifications Foundation
+
+- 新增 Teams Power Automate Webhook 通知服務
+- 啟用 Outlook Power Automate Webhook 寄信服務
+- 新增 Microsoft 365 通知狀態與測試 API
+- 新增 Microsoft 365 開發者診斷頁籤
+- 保留 LINE 模組，避免遷移期間中斷既有 API
+- 尚未將任務、會議與簽核事件自動綁定通知
+
 ## V5.5.3 Microsoft 365 Migration Baseline
 - 統一執行環境、部署設定、介面及文件的目前版本標示
 - 移除未被引用的根目錄舊版 `task_board.py`

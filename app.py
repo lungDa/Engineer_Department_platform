@@ -32,7 +32,7 @@ def render_status_badge(ok: bool, ok_text: str = "正常", fail_text: str = "異
 
 def render_enterprise_diagnostics():
     st.markdown("#### 🛠 Enterprise System Diagnostics")
-    st.caption("集中檢查 Google Sheet、LINE Official Account、Render API、AI 等外部服務連線狀態。")
+    st.caption("集中檢查 Google Sheet、Microsoft 365 通知、LINE、Render API、AI 等外部服務狀態。")
 
     action_col_1, action_col_2 = st.columns([2, 1])
     with action_col_1:
@@ -57,9 +57,10 @@ def render_enterprise_diagnostics():
 
     st.write("---")
 
-    tab_sheet, tab_line, tab_render, tab_ai, tab_report = st.tabs(
+    tab_sheet, tab_m365, tab_line, tab_render, tab_ai, tab_report = st.tabs(
         [
             "🟢 Google Sheet",
+            "🟣 Microsoft 365",
             "🟩 LINE Official Account",
             "🟦 Render API",
             "🟡 AI",
@@ -87,6 +88,23 @@ def render_enterprise_diagnostics():
             st.success("Google Sheet 已成功連線。")
 
         st.info("目前 Google Sheet 快取由 services/sheet_db.py 控制，Tasks TTL 較短，Users / Categories / Tags TTL 較長。")
+
+    with tab_m365:
+        m365 = report["microsoft365"]
+        st.markdown("##### 🟣 Microsoft 365 通知")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Teams 通知", "OK" if m365["teams_configured"] else "未設定")
+        c2.metric("Outlook 寄信", "OK" if m365["outlook_configured"] else "未設定")
+        c3.metric("共用驗證 Token", "OK" if m365["webhook_token_present"] else "選用")
+        st.caption(f"Teams Webhook：{m365['teams_webhook_masked']}")
+        st.caption(f"Outlook Webhook：{m365['outlook_webhook_masked']}")
+        st.info("Webhook 網址視同密碼，請只放在 Render 環境變數，不要寫入 GitHub。")
+
+        features = m365.get("features", {})
+        f1, f2, f3 = st.columns(3)
+        f1.metric("Teams Flow", "READY" if features.get("teams_channel_notification") else "OFF")
+        f2.metric("Outlook Flow", "READY" if features.get("outlook_send_mail") else "OFF")
+        f3.metric("事件觸發", "已接上" if features.get("event_triggers_connected") else "下一階段")
 
     with tab_line:
         line = report["line"]

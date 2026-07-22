@@ -8,4 +8,4 @@ services:
       - key: ENVIRONMENT
         value: production
       - key: APP_VERSION
-        value: V5.5.3 Microsoft 365 Migration Baseline
+        value: V5.6.0 Microsoft 365 Notifications Foundation

@@ -20,7 +20,7 @@ V5.3.0 新增 11 個工程課別。側邊欄先選擇課別後，任務、行事
 
 目前版本：
 
-**V5.5.3 Microsoft 365 Migration Baseline**
+**V5.6.0 Microsoft 365 Notifications Foundation**
 
 ## 已完成功能
 
@@ -148,6 +148,11 @@ GOOGLE_SERVICE_ACCOUNT_JSON=
 LINE_CHANNEL_SECRET=
 LINE_CHANNEL_ACCESS_TOKEN=
 
+# Microsoft 365 / Power Automate（請勿提交真實網址）
+TEAMS_WEBHOOK_URL=
+OUTLOOK_WEBHOOK_URL=
+M365_WEBHOOK_TOKEN=
+
 OPENAI_API_KEY=
 ```
 
@@ -179,6 +184,9 @@ OPENAI_API_KEY=
 | GET | /api/line/status |
 | POST | /api/line/webhook |
 | POST | /api/line/webhook-test |
+| GET | /api/notifications/status |
+| POST | /api/notifications/teams/test |
+| POST | /api/notifications/outlook/test |
 
 ---
 
@@ -197,7 +205,8 @@ Developer Mode 可檢查：
 
 | Version | Status |
 |----------|--------|
-| V5.5.3 Microsoft 365 Migration Baseline | ✅ Current Baseline |
+| V5.6.0 Microsoft 365 Notifications Foundation | ✅ Current |
+| V5.5.3 Microsoft 365 Migration Baseline | ✅ Stable Baseline |
 | V5.1.2 LINE User Binding | Planned |
 | V5.2 AI Assistant | Planned |
 | V5.3 Gmail & Calendar | Planned |

@@ -45,7 +45,7 @@ class ViewComponents:
             <div class="edp-sidebar-brand">
                 <div class="edp-sidebar-title">鋒霈工程一部平台</div>
                 <div class="edp-sidebar-sub">Project · Task · Meeting · Approval</div>
-                <div class="edp-version-pill">● {st.session_state.get('app_version', 'V5.5.3 Microsoft 365 Migration Baseline')}</div>
+                <div class="edp-version-pill">● {st.session_state.get('app_version', 'V5.6.0 Microsoft 365 Notifications Foundation')}</div>
             </div>
             """,
             unsafe_allow_html=True,

@@ -1,7 +1,7 @@
-# V5.5.3 Microsoft 365 Migration Baseline constants
+# V5.6.0 Microsoft 365 Notifications Foundation constants
 
 APP_TITLE = "開發工程部平台"
-APP_VERSION = "V5.5.3 Microsoft 365 Migration Baseline"
+APP_VERSION = "V5.6.0 Microsoft 365 Notifications Foundation"
 
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
 DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M"

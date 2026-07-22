@@ -7,7 +7,9 @@ import requests
 from config.settings import get_settings
 from services.ai_service import ai_service
 from services.line_service import line_service
+from services.mail_service import mail_service
 from services.sheet_db import SheetDB, SheetDiagnostics
+from services.teams_service import teams_service
 from shared.logger import get_logger
 
 logger = get_logger(__name__)
@@ -61,6 +63,25 @@ class DiagnosticsService:
             "channel_access_token_masked": DiagnosticsService.mask_value(settings.line_channel_access_token),
             "webhook_url": webhook_url,
             "features": status.get("features", {}),
+        }
+
+    @staticmethod
+    def microsoft365_status() -> dict[str, Any]:
+        settings = get_settings()
+        return {
+            "name": "Microsoft 365 Notifications",
+            "teams_configured": teams_service.is_configured(),
+            "outlook_configured": mail_service.is_configured(),
+            "teams_webhook_present": bool(settings.teams_webhook_url),
+            "outlook_webhook_present": bool(settings.outlook_webhook_url),
+            "webhook_token_present": bool(settings.m365_webhook_token),
+            "teams_webhook_masked": DiagnosticsService.mask_value(settings.teams_webhook_url, keep=8),
+            "outlook_webhook_masked": DiagnosticsService.mask_value(settings.outlook_webhook_url, keep=8),
+            "features": {
+                "teams_channel_notification": True,
+                "outlook_send_mail": True,
+                "event_triggers_connected": False,
+            },
         }
 
     @staticmethod
@@ -126,6 +147,7 @@ class DiagnosticsService:
     def system_report() -> dict[str, Any]:
         google = DiagnosticsService.google_sheet_status()
         line = DiagnosticsService.line_status()
+        microsoft365 = DiagnosticsService.microsoft365_status()
         render = DiagnosticsService.render_api_status()
         ai = DiagnosticsService.ai_status()
 
@@ -134,6 +156,8 @@ class DiagnosticsService:
             google.get("service_account_valid"),
             line.get("channel_secret_present"),
             line.get("channel_access_token_present"),
+            microsoft365.get("teams_configured"),
+            microsoft365.get("outlook_configured"),
             render.get("configured"),
             render.get("health_ok"),
             render.get("ready_ok"),
@@ -151,6 +175,7 @@ class DiagnosticsService:
             "total": total,
             "google_sheet": google,
             "line": line,
+            "microsoft365": microsoft365,
             "render_api": render,
             "ai": ai,
         }

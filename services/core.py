@@ -79,7 +79,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V5.5.3 Microsoft 365 Migration Baseline"
+    VERSION = "V5.6.0 Microsoft 365 Notifications Foundation"
 
     @staticmethod
     def load_enterprise_theme():

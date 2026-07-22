@@ -18,7 +18,7 @@ if load_dotenv:
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Engineer Department Platform")
-    app_version: str = os.getenv("APP_VERSION", "V5.5.3 Microsoft 365 Migration Baseline")
+    app_version: str = os.getenv("APP_VERSION", "V5.6.0 Microsoft 365 Notifications Foundation")
     environment: str = os.getenv("ENVIRONMENT", "development")
 
     streamlit_base_url: str = os.getenv("STREAMLIT_BASE_URL", "")
@@ -29,6 +29,10 @@ class Settings:
 
     line_channel_secret: str = os.getenv("LINE_CHANNEL_SECRET", "")
     line_channel_access_token: str = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+
+    teams_webhook_url: str = os.getenv("TEAMS_WEBHOOK_URL", "")
+    outlook_webhook_url: str = os.getenv("OUTLOOK_WEBHOOK_URL", "")
+    m365_webhook_token: str = os.getenv("M365_WEBHOOK_TOKEN", "")
 
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
 

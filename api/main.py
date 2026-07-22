@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from api.middleware.cors import setup_cors
 from api.middleware.logging import request_logging_middleware
-from api.routers import announcements, health, line, system, tasks, users
+from api.routers import announcements, health, line, notifications, system, tasks, users
 from config.settings import get_settings
 from shared.logger import get_logger
 
@@ -14,7 +14,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=f"{settings.app_name} API",
         version=settings.app_version,
-        description="V5 Enterprise API service for LINE Smart Assistant, automation, and platform integration.",
+        description="V5 Enterprise API service for Microsoft 365 notifications, automation, and platform integration.",
     )
 
     setup_cors(app)
@@ -26,6 +26,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router)
     app.include_router(announcements.router)
     app.include_router(line.router)
+    app.include_router(notifications.router)
 
     @app.on_event("startup")
     async def startup_event():
