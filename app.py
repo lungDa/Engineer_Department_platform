@@ -43,7 +43,14 @@ def render_enterprise_diagnostics():
             st.success("已清除 Google Sheet 快取。")
             st.rerun()
 
-    if run_check or "enterprise_diagnostics_report" not in st.session_state:
+    cached_report = st.session_state.get("enterprise_diagnostics_report")
+    report_is_current = (
+        isinstance(cached_report, dict)
+        and cached_report.get("schema_version") == DiagnosticsService.REPORT_SCHEMA_VERSION
+        and "microsoft365" in cached_report
+    )
+
+    if run_check or not report_is_current:
         with st.spinner("正在執行系統診斷..."):
             st.session_state["enterprise_diagnostics_report"] = DiagnosticsService.system_report()
 
@@ -90,7 +97,9 @@ def render_enterprise_diagnostics():
         st.info("目前 Google Sheet 快取由 services/sheet_db.py 控制，Tasks TTL 較短，Users / Categories / Tags TTL 較長。")
 
     with tab_m365:
-        m365 = report["microsoft365"]
+        # Defensive fallback: an incomplete or legacy cached report must never
+        # crash the whole Streamlit app.
+        m365 = report.get("microsoft365") or DiagnosticsService.microsoft365_status()
         st.markdown("##### 🟣 Microsoft 365 通知")
         c1, c2, c3 = st.columns(3)
         c1.metric("Teams 通知", "OK" if m365["teams_configured"] else "未設定")

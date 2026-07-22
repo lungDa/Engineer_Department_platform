@@ -22,6 +22,8 @@ class DiagnosticsService:
     It does not expose secrets. It only reports configured / not configured.
     """
 
+    REPORT_SCHEMA_VERSION = 2
+
     @staticmethod
     def mask_value(value: str | None, keep: int = 4) -> str:
         value = str(value or "").strip()
@@ -169,6 +171,7 @@ class DiagnosticsService:
         score = round((passed / total) * 100) if total else 0
 
         return {
+            "schema_version": DiagnosticsService.REPORT_SCHEMA_VERSION,
             "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "score": score,
             "passed": passed,
