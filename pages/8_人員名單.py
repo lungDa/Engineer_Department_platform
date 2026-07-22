@@ -69,11 +69,12 @@ summary_cols[3].metric("目前課別", st.session_state.current_department)
 st.divider()
 
 # 所有部門共用同一組欄位、順序、寬度與表格高度，避免各表格隨內容偏移。
-PERSONNEL_COLUMNS = ["課別", "姓名", "帳號／工號", "本課職務", "主要權限"]
+PERSONNEL_COLUMNS = ["課別", "姓名", "帳號／工號", "Email", "本課職務", "主要權限"]
 PERSONNEL_COLUMN_CONFIG = {
     "課別": st.column_config.TextColumn("課別", width="medium"),
     "姓名": st.column_config.TextColumn("姓名", width="small"),
     "帳號／工號": st.column_config.TextColumn("帳號／工號", width="medium"),
+    "Email": st.column_config.TextColumn("Email", width="large"),
     "本課職務": st.column_config.TextColumn("本課職務", width="large"),
     "主要權限": st.column_config.NumberColumn("主要權限", width="small", format="%d"),
 }
@@ -98,6 +99,7 @@ for department in DEPARTMENTS:
                 "課別": department,
                 "姓名": user.get("name", ""),
                 "帳號／工號": user.get("account", ""),
+                "Email": user.get("email", ""),
                 "本課職務": "、".join(UserService.roles_in_department(user, department)),
                 # 名單顯示與排序只採主要職務權限，不計兼任職務。
                 "主要權限": parse_int(user.get("role_level", 0), 0),
@@ -176,6 +178,19 @@ if management_unlocked:
                 disabled=selected_user is not None,
                 help="既有人員的帳號作為唯一識別，修改時不可變更。",
             )
+            contact1, contact2 = st.columns(2)
+            with contact1:
+                email = st.text_input(
+                    "公司 Email（Outlook 通知）",
+                    value=str((selected_user or {}).get("email", "")),
+                    placeholder="name@company.com",
+                )
+            with contact2:
+                line_user_id = st.text_input(
+                    "LINE User ID（選填）",
+                    value=str((selected_user or {}).get("line_user_id", "")),
+                    help="LINE Webhook 取得的 User ID，通常以 U 開頭；不是 LINE 顯示名稱。",
+                )
             department = st.selectbox(
                 "所屬課別",
                 DEPARTMENTS,
@@ -242,6 +257,8 @@ if management_unlocked:
                         direct_password=direct_password,
                         department=department,
                         assignments=assignments,
+                        email=email,
+                        line_user_id=line_user_id,
                     )
                     st.success("人員已新增。" if result == "created" else "人員資料已修改。")
                     st.rerun()
