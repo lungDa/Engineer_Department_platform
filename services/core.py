@@ -178,14 +178,15 @@ class UserService:
     DEFAULT_PASSWORD = "0000"
     COLUMNS = [
         "id", "name", "account", "password", "role", "role_level", "active",
-        "department", "assignments", "must_change_password", "created_at", "updated_at", "last_login_at",
+        "department", "assignments", "email", "line_user_id", "must_change_password",
+        "created_at", "updated_at", "last_login_at",
     ]
 
     @staticmethod
     def default_users():
         now = now_text()
         return [
-            {"id": 1, "name": "開發者", "account": "developer", "password": UserService.DEFAULT_PASSWORD, "role": "開發者", "role_level": 9, "active": "TRUE", "department": INDEPENDENT_DEPARTMENT, "assignments": "[]", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
+            {"id": 1, "name": "開發者", "account": "developer", "password": UserService.DEFAULT_PASSWORD, "role": "開發者", "role_level": 9, "active": "TRUE", "department": INDEPENDENT_DEPARTMENT, "assignments": "[]", "email": "", "line_user_id": "", "must_change_password": "TRUE", "created_at": now, "updated_at": now, "last_login_at": ""},
         ]
 
     @staticmethod
@@ -410,7 +411,9 @@ class UserService:
         return False, "找不到帳號。"
 
     @staticmethod
-    def upsert_user(name, account, role, role_level, active=True, reset_password=False, direct_password="", department=None, assignments=None):
+    def upsert_user(name, account, role, role_level, active=True, reset_password=False,
+                    direct_password="", department=None, assignments=None,
+                    email=None, line_user_id=None):
         records = UserService.load_all()
         now = now_text()
         target = str(account).strip().lower()
@@ -424,6 +427,10 @@ class UserService:
                 row["department"] = department or record_department(row)
                 if assignments is not None:
                     row["assignments"] = json.dumps(assignments, ensure_ascii=False)
+                if email is not None:
+                    row["email"] = str(email or "").strip()
+                if line_user_id is not None:
+                    row["line_user_id"] = str(line_user_id or "").strip()
                 if direct_password:
                     row["password"] = str(direct_password)
                     row["must_change_password"] = "TRUE"
@@ -444,6 +451,8 @@ class UserService:
             "active": bool_text(active),
             "department": department or current_department(),
             "assignments": json.dumps(assignments or [], ensure_ascii=False),
+            "email": str(email or "").strip(),
+            "line_user_id": str(line_user_id or "").strip(),
             "must_change_password": "TRUE",
             "created_at": now,
             "updated_at": now,
