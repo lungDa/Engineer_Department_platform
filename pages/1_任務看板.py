@@ -1,3 +1,178 @@
+
+
+
+
+
+
+
+
+
+
+但平台上還是顯示失敗
+
+我輸入了 但還是失敗跟未設定
+
+
+
+
+
+
+Engineer_Department_platform-main(7).zip
+壓縮封存檔案
+
+
+但目前看起來有出現我的名字
+
+這個?
+
+他不讓我儲存
+
+這樣?
+
+
+
+
+
+這樣?
+
+沒有 發送 Outlook 測試郵件 按紐
+
+了解，第 7 步調整如下：
+
+即時通知：LINE 與 Teams 可選擇或並行
+
+郵件通知：只使用 Outlook（Power Automate）
+
+不再使用 Gmail／SMTP／其他 Email 寄送方式
+
+任務到期、會議、簽核、每日報表的郵件全部統一走 Outlook
+
+Outlook 寄送失敗時記錄錯誤，不改由舊郵件系統重複寄送
+
+後續修改時，我會保留舊郵件程式檔作為相容性備份，但停用其實際呼叫，避免重複寄信。
+
+
+那再來呢?
+
+處理時間為 25s
+接下來進行「第 7-1 步：建立多管道通知核心」。
+
+我檢查目前程式後確認：Teams、Outlook 都已能測試發送，但任務看板、會議、簽核等功能尚未正式呼叫它們。
+
+整合順序如下：
+
+建立統一通知服務
+
+LINE：保留
+
+Teams：保留
+
+Outlook：唯一郵件管道
+
+各管道獨立判斷成功或失敗
+
+先接「任務看板」
+
+新增任務時通知
+
+指派人員時寄 Outlook
+
+任務到期／逾期時通知
+
+任務完成時通知
+
+Teams 發到指定頻道
+
+再依序接入
+
+會議系統
+
+簽核中心
+
+公告欄
+
+每日工作報表
+
+最後增加通知紀錄，顯示各管道：
+
+LINE：成功／失敗／未啟用
+Teams：成功／失敗／未啟用
+Outlook：成功／失敗／無收件信箱
+第一批我建議先完成：
+
+統一通知服務＋任務看板通知
+
+其中 Teams 可以立即使用；Outlook 會依「人員名單」中的公司 Email 寄給被指派者。若某人沒填 Email，任務仍會建立，只提示該人未寄出郵件，不會影響其他通知。
+
+
+好
+
+處理時間為 3m 33s
+第 7-1 步已完成，並通過 Python 語法檢查。
+
+請替換以下 4 個檔案：
+
+新增：
+
+修改：
+
+修改：
+
+修改：
+
+完成後：
+
+等 Streamlit 重新部署。
+
+進入「人員名單」。
+
+開啟人員管理，替人員填寫公司 Email。
+
+建立測試任務並選擇 Teams＋Outlook。
+
+確認 Teams 卡片與 Outlook 郵件都有收到。
+
+目前已支援：
+
+任務新增、更新、完成與逾期狀態通知
+
+Teams、Outlook、LINE 可獨立選擇
+
+Outlook 只使用 Power Automate
+
+通知失敗不影響任務寫入
+
+分別顯示成功、失敗或缺少聯絡資料
+
+注意：目前「逾期通知」會在任務被修改時觸發；每日自動掃描逾期任務屬於後續排程階段。
+
+
+新增程式的路徑 給我
+
+新增的程式請放在專案根目錄下的：
+
+Engineer_Department_platform-main/
+└─ services/
+   └─ notification_service.py
+GitHub 完整路徑：
+
+services/notification_service.py
+也就是和以下檔案放在同一個資料夾：
+
+services/
+├─ core.py
+├─ mail_service.py
+├─ teams_service.py
+└─ notification_service.py  ← 新增在這裡
+其餘 3 個是替換原有檔案，不是新增：
+
+services/core.py
+pages/1_任務看板.py
+pages/8_人員名單.py
+
+1_%E4%BB%BB%E5%8B%99%E7%9C%8B%E6%9D%BF.py
+
+
 import html
 from datetime import date, datetime
 
@@ -14,6 +189,7 @@ from utils import (
     parse_float,
     parse_int,
 )
+from services.notification_service import notification_service
 
 
 st.set_page_config(page_title="任務看板｜Enterprise V6", layout="wide")
@@ -85,6 +261,26 @@ def persist_task(task, changes, account, password):
     editor_name = editor.get("name") or editor.get("account") or account
     TaskService.update_task(task.get("id"), changes, author=editor_name)
     return editor_name
+
+
+def show_notification_result(result):
+    channels = (result.get("data") or {}).get("channels", {})
+    labels = {"teams": "Teams", "outlook": "Outlook", "line": "LINE"}
+    for channel, channel_result in channels.items():
+        label = labels.get(channel, channel)
+        message = channel_result.get("message", "")
+        if channel_result.get("skipped"):
+            st.info(f"{label}：略過（{message}）")
+        elif channel_result.get("ok"):
+            st.success(f"{label}：成功")
+        else:
+            st.warning(f"{label}：失敗（{message}）")
+
+
+pending_notification = st.session_state.pop("task_notification_result", None)
+if pending_notification:
+    st.markdown("##### 🔔 上次任務通知結果")
+    show_notification_result(pending_notification)
 
 
 st.markdown(
@@ -175,6 +371,12 @@ with st.expander("➕ 新增任務", expanded=not tasks):
         with p3:
             estimated_tags = st.text_input("標籤", placeholder="設計, 採購, 現場")
         notes = st.text_area("任務說明／備註")
+        notify_channels = st.multiselect(
+            "建立後通知管道",
+            ["Teams", "Outlook", "LINE"],
+            default=["Teams", "Outlook"],
+            help="Outlook 只寄給人員名單中已設定公司 Email 的指派人員。",
+        )
 
         submitted = st.form_submit_button("建立任務", width="stretch")
         if submitted:
@@ -199,7 +401,15 @@ with st.expander("➕ 新增任務", expanded=not tasks):
                         "depends_on": [], "history": [f"[{datetime.now().strftime('%m-%d %H:%M')}] {creator_name} 建立任務"],
                     }
                     try:
-                        TaskService.add_task(new_task, author=creator_name, account=creator.get("account", creator_account))
+                        created_task = TaskService.add_task(new_task, author=creator_name, account=creator.get("account", creator_account))
+                        task_for_notification = created_task if isinstance(created_task, dict) else new_task
+                        result = notification_service.send_task_event(
+                            event="created",
+                            task=task_for_notification,
+                            actor=creator_name,
+                            channels=[channel.lower() for channel in notify_channels],
+                        )
+                        st.session_state["task_notification_result"] = result
                         SheetDB.clear_cache("Tasks")
                         st.success("任務已建立並寫入 Google Sheet。")
                         st.rerun()
@@ -344,6 +554,12 @@ def render_task(task):
             edit_tags = st.text_input("標籤", value=",".join(tags))
             edit_notes = st.text_area("備註", value=str(task.get("notes", "")))
             add_hours = st.number_input("本次新增工時", min_value=0.0, step=0.5, value=0.0)
+            edit_notify_channels = st.multiselect(
+                "儲存後通知管道",
+                ["Teams", "Outlook", "LINE"],
+                default=["Teams", "Outlook"],
+                key=f"notify_channels_{task_id}",
+            )
 
             if st.form_submit_button("儲存修改", width="stretch"):
                 if not editor_account.strip() or not editor_password:
@@ -363,6 +579,17 @@ def render_task(task):
                     }
                     try:
                         editor_name = persist_task(task, changes, editor_account, editor_password)
+                        event = "completed" if edit_progress >= 100 and progress < 100 else "updated"
+                        updated_task = {**task, **changes}
+                        if event == "updated" and is_overdue(updated_task):
+                            event = "overdue"
+                        result = notification_service.send_task_event(
+                            event=event,
+                            task=updated_task,
+                            actor=editor_name,
+                            channels=[channel.lower() for channel in edit_notify_channels],
+                        )
+                        st.session_state["task_notification_result"] = result
                         st.success(f"任務已更新。修改人：{editor_name}")
                         st.rerun()
                     except Exception as exc:
