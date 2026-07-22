@@ -139,6 +139,11 @@ class SheetDB:
     def get_sheet_id():
         """Read spreadsheet id from several supported configurations."""
         try:
+            # Render/FastAPI uses environment variables instead of Streamlit Secrets.
+            env_value = os.getenv("GOOGLE_SHEET_ID") or os.getenv("SHEET_ID") or os.getenv("SPREADSHEET_ID")
+            if env_value:
+                return str(env_value).strip()
+
             if "SHEET_ID" in st.secrets and str(st.secrets.get("SHEET_ID", "")).strip():
                 return str(st.secrets.get("SHEET_ID")).strip()
 
@@ -158,10 +163,6 @@ class SheetDB:
                 if value:
                     return str(value).strip()
 
-            env_value = os.getenv("SHEET_ID") or os.getenv("SPREADSHEET_ID")
-            if env_value:
-                return str(env_value).strip()
-
             return None
         except Exception as e:
             SheetDB._set_error(f"讀取 SHEET_ID 失敗：{e}")
@@ -171,6 +172,11 @@ class SheetDB:
     def get_service_account_info():
         """Read service account info from supported Streamlit Secrets shapes."""
         try:
+            # Render stores the complete service-account JSON as one secret.
+            env_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+            if env_json:
+                return SheetDB._normalize_private_key(json.loads(env_json))
+
             if "gcp_service_account" in st.secrets:
                 info = SheetDB._plain(st.secrets.get("gcp_service_account"))
                 return SheetDB._normalize_private_key(info)
