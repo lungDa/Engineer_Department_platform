@@ -30,4 +30,5 @@ jobs:
           M365_CLIENT_ID: ${{ secrets.M365_CLIENT_ID }}
           M365_CLIENT_SECRET: ${{ secrets.M365_CLIENT_SECRET }}
           M365_WEBHOOK_TOKEN: ${{ secrets.M365_WEBHOOK_TOKEN }}
+          M365_GROUP_ID: ${{ vars.M365_GROUP_ID }}
         run: python scripts/m365_sync.py
