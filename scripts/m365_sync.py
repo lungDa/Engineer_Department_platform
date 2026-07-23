@@ -7,6 +7,9 @@ TENANT_ID = os.environ["M365_TENANT_ID"].strip()
 CLIENT_ID = os.environ["M365_CLIENT_ID"].strip()
 CLIENT_SECRET = os.environ["M365_CLIENT_SECRET"].strip()
 WEBHOOK_TOKEN = os.environ["M365_WEBHOOK_TOKEN"].strip()
+GROUP_ID = os.environ["M365_GROUP_ID"].strip()
+
+PLATFORM_DEPARTMENT = "工程一部"
 
 SYNC_API_URL = (
     "https://engineer-department-platform.onrender.com"
@@ -67,11 +70,13 @@ def get_graph_access_token():
     return access_token
 
 
-def get_m365_users(access_token):
+def get_m365_group_users(access_token):
     url = (
-        "https://graph.microsoft.com/v1.0/users"
+        "https://graph.microsoft.com/v1.0/"
+        f"groups/{GROUP_ID}/transitiveMembers/"
+        "microsoft.graph.user"
         "?$select=id,displayName,mail,userPrincipalName,"
-        "department,jobTitle,mobilePhone,accountEnabled,userType"
+        "jobTitle,mobilePhone,accountEnabled,userType"
         "&$top=999"
     )
 
@@ -97,10 +102,13 @@ def get_m365_users(access_token):
                 graph_error = {}
 
             raise RuntimeError(
-                "\nMicrosoft Graph 人員資料取得失敗"
+                "\nMicrosoft Graph 群組成員取得失敗"
+                f"\n群組 ID：{GROUP_ID}"
                 f"\nHTTP 狀態：{response.status_code}"
-                f"\n錯誤代碼：{graph_error.get('code', 'unknown_error')}"
-                f"\n錯誤說明：{graph_error.get('message', '無詳細說明')}"
+                f"\n錯誤代碼："
+                f"{graph_error.get('code', 'unknown_error')}"
+                f"\n錯誤說明："
+                f"{graph_error.get('message', '無詳細說明')}"
             )
 
         data = response.json()
@@ -114,10 +122,11 @@ def transform_users(users):
     result = []
 
     for user in users:
-        # 排除停用帳號及外部來賓
+        # 排除停用帳號
         if user.get("accountEnabled") is False:
             continue
 
+        # 排除外部來賓
         if user.get("userType") == "Guest":
             continue
 
@@ -133,9 +142,7 @@ def transform_users(users):
                 "name": name,
                 "email": email,
                 "upn": upn,
-                "department": (
-                    user.get("department") or ""
-                ).strip(),
+                "department": PLATFORM_DEPARTMENT,
                 "job_title": (
                     user.get("jobTitle") or ""
                 ).strip(),
@@ -178,24 +185,32 @@ def sync_to_platform(users):
 
 
 def main():
+    if not GROUP_ID:
+        raise RuntimeError(
+            "M365_GROUP_ID 未設定或內容為空白"
+        )
+
     print("開始取得 Microsoft 365 登入權杖……")
     access_token = get_graph_access_token()
     print("Microsoft 365 登入權杖取得成功")
 
-    print("開始讀取 Microsoft 365 人員資料……")
-    graph_users = get_m365_users(access_token)
+    print("開始讀取工程一部群組成員……")
+    print(f"Microsoft 365 群組 ID：{GROUP_ID}")
+
+    graph_users = get_m365_group_users(access_token)
     platform_users = transform_users(graph_users)
 
     if not platform_users:
         raise RuntimeError(
-            "Microsoft Graph 未取得可同步的人員資料"
+            "Microsoft Graph 未取得可同步的工程一部人員"
         )
 
-    print("開始同步人員資料至開發工程部平台……")
+    print("開始同步工程一部人員至開發工程部平台……")
     result = sync_to_platform(platform_users)
 
-    print(f"Microsoft Graph 取得：{len(graph_users)} 人")
+    print(f"群組取得成員：{len(graph_users)} 人")
     print(f"符合同步條件：{len(platform_users)} 人")
+    print(f"平台部門設定：{PLATFORM_DEPARTMENT}")
     print(f"平台同步結果：{result}")
 
 
