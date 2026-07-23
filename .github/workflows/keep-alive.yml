@@ -14,11 +14,11 @@ jobs:
        - name: Ping Streamlit
        - name: Ping Streamlit
           run: |
-            curl --fail \
-              --retry 3 \
-              --retry-delay 10 \
-              --max-time 60 \
-              "https://engineer-department-platform.streamlit.app/_stcore/health"
+          curl --fail \
+            --retry 3 \
+            --retry-delay 10 \
+            --max-time 60 \
+            "https://engineer-department-platform.streamlit.app/_stcore/health"
          
       - name: Ping Render API
         run: |
