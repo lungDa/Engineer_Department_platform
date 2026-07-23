@@ -30,9 +30,41 @@ def get_graph_access_token():
         },
         timeout=30,
     )
-    response.raise_for_status()
 
-    return response.json()["access_token"]
+    if not response.ok:
+        try:
+            error_data = response.json()
+        except ValueError:
+            error_data = {}
+
+        error_code = error_data.get("error", "unknown_error")
+        error_description = error_data.get(
+            "error_description",
+            "Microsoft 未提供詳細錯誤內容",
+        )
+        trace_id = error_data.get("trace_id", "")
+        correlation_id = error_data.get("correlation_id", "")
+        timestamp = error_data.get("timestamp", "")
+
+        raise RuntimeError(
+            "\nMicrosoft 登入權杖取得失敗"
+            f"\nHTTP 狀態：{response.status_code}"
+            f"\n錯誤類型：{error_code}"
+            f"\n錯誤說明：{error_description}"
+            f"\nTrace ID：{trace_id}"
+            f"\nCorrelation ID：{correlation_id}"
+            f"\n時間：{timestamp}"
+        )
+
+    token_data = response.json()
+    access_token = token_data.get("access_token")
+
+    if not access_token:
+        raise RuntimeError(
+            "Microsoft 回應成功，但沒有取得 access_token"
+        )
+
+    return access_token
 
 
 def get_m365_users(access_token):
