@@ -10,20 +10,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-     - name: Ping Streamlit
-       run: |
-        curl \
-          --fail \
-          --retry 3 \
-          --retry-delay 10 \
-          --max-time 60 \
-          "https://engineer-department-platform.streamlit.app/_stcore/health/"
-         
-      - name: Ping Render API
+      - name: Ping Streamlit
         run: |
-          curl --location \
+          curl \
+            --silent \
+            --show-error \
+            --fail \
+            --max-time 60 \
+            --output /dev/null \
+            "https://engineer-department-platform.streamlit.app/"
+
+      - name: Ping Render API
+        if: always()
+        run: |
+          curl \
+            --silent \
+            --show-error \
+            --location \
             --fail \
             --retry 3 \
             --retry-delay 10 \
-            --max-time 60 \
+            --max-time 120 \
+            --output /dev/null \
             "https://engineer-department-platform.onrender.com/health"
