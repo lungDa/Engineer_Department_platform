@@ -1,0 +1,29 @@
+name: Keep Services Awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping-services:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping Streamlit
+        run: |
+          curl --location \
+            --fail \
+            --retry 3 \
+            --retry-delay 10 \
+            --max-time 60 \
+            "https://engineer-department-platform.streamlit.app/"
+
+      - name: Ping Render API
+        run: |
+          curl --location \
+            --fail \
+            --retry 3 \
+            --retry-delay 10 \
+            --max-time 60 \
+            "https://engineer-department-platform.onrender.com/health"
