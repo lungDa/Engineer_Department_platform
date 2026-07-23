@@ -1,0 +1,33 @@
+name: Microsoft 365 人員同步
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # 每天台灣時間上午 06:00 執行（UTC 前一天 22:00）
+    - cron: "0 22 * * *"
+
+jobs:
+  sync-m365-users:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 取得專案程式
+        uses: actions/checkout@v4
+
+      - name: 設定 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安裝套件
+        run: python -m pip install requests
+
+      - name: 同步 Microsoft 365 人員
+        env:
+          M365_TENANT_ID: ${{ secrets.M365_TENANT_ID }}
+          M365_CLIENT_ID: ${{ secrets.M365_CLIENT_ID }}
+          M365_CLIENT_SECRET: ${{ secrets.M365_CLIENT_SECRET }}
+          M365_WEBHOOK_TOKEN: ${{ secrets.M365_WEBHOOK_TOKEN }}
+        run: python scripts/m365_sync.py
