@@ -74,7 +74,11 @@ def _github_api(
         raise RuntimeError(f"無法連線 GitHub：{exc.reason}") from exc
 
 
-def _workflow_run_data(run: dict, started_at: str) -> dict:
+def _workflow_run_data(
+    run: dict,
+    started_at: str,
+    known_run_ids: list[str] | None = None,
+) -> dict:
     """整理 GitHub Actions 執行資料，供 Session State 安全保存。"""
     return {
         "id": run.get("id"),
@@ -85,6 +89,7 @@ def _workflow_run_data(run: dict, started_at: str) -> dict:
         "created_at": run.get("created_at", ""),
         "updated_at": run.get("updated_at", ""),
         "started_at": started_at,
+        "known_run_ids": known_run_ids or [],
         "record_found": True,
     }
 
@@ -95,6 +100,19 @@ def _trigger_m365_workflow() -> dict:
     encoded_workflow = urllib.parse.quote(workflow, safe="")
     started_at = datetime.now(timezone.utc)
     started_at_text = started_at.isoformat()
+    runs_path = (
+        f"/repos/{repository}/actions/workflows/{encoded_workflow}/runs"
+        f"?event=workflow_dispatch&branch={M365_WORKFLOW_BRANCH}&per_page=10"
+    )
+
+    # 先記住送出前已存在的執行紀錄。GitHub 的 created_at 只精確到秒，
+    # 不能拿來與包含微秒的本機時間直接比較，否則同一秒建立的 Run 會被漏掉。
+    existing = _github_api("GET", runs_path, token)
+    known_run_ids = [
+        str(run.get("id"))
+        for run in existing.get("workflow_runs", [])
+        if run.get("id") is not None
+    ]
 
     _github_api(
         "POST",
@@ -106,21 +124,14 @@ def _trigger_m365_workflow() -> dict:
     # workflow_dispatch 接受後通常需數秒才會建立 run。
     for _ in range(15):
         time.sleep(2)
-        result = _github_api(
-            "GET",
-            (
-                f"/repos/{repository}/actions/workflows/{encoded_workflow}/runs"
-                f"?event=workflow_dispatch&branch={M365_WORKFLOW_BRANCH}&per_page=10"
-            ),
-            token,
-        )
+        result = _github_api("GET", runs_path, token)
         for run in result.get("workflow_runs", []):
-            created_at = str(run.get("created_at", ""))
-            if not created_at:
-                continue
-            run_created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            if run_created >= started_at:
-                return _workflow_run_data(run, started_at_text)
+            if str(run.get("id")) not in known_run_ids:
+                return _workflow_run_data(
+                    run,
+                    started_at_text,
+                    known_run_ids,
+                )
 
     # GitHub 已接受 workflow_dispatch，但新 run 偶爾不會立即出現在查詢結果。
     # 這不是啟動失敗，因此回傳「已送出」狀態，避免誤顯示紅色錯誤。
@@ -133,6 +144,7 @@ def _trigger_m365_workflow() -> dict:
             f"{encoded_workflow}"
         ),
         "started_at": started_at_text,
+        "known_run_ids": known_run_ids,
         "record_found": False,
     }
 
@@ -142,6 +154,10 @@ def _refresh_m365_workflow(run_state: dict) -> dict:
     repository, token, workflow = _github_settings()
     run_id = run_state.get("id")
     started_at_text = str(run_state.get("started_at", ""))
+    known_run_ids = [
+        str(run_id)
+        for run_id in run_state.get("known_run_ids", [])
+    ]
 
     if run_id:
         result = _github_api(
@@ -149,7 +165,11 @@ def _refresh_m365_workflow(run_state: dict) -> dict:
             f"/repos/{repository}/actions/runs/{run_id}",
             token,
         )
-        return _workflow_run_data(result, started_at_text)
+        return _workflow_run_data(
+            result,
+            started_at_text,
+            known_run_ids,
+        )
 
     encoded_workflow = urllib.parse.quote(workflow, safe="")
     result = _github_api(
@@ -160,18 +180,13 @@ def _refresh_m365_workflow(run_state: dict) -> dict:
         ),
         token,
     )
-    started_at = (
-        datetime.fromisoformat(started_at_text.replace("Z", "+00:00"))
-        if started_at_text
-        else datetime.now(timezone.utc)
-    )
     for run in result.get("workflow_runs", []):
-        created_at = str(run.get("created_at", ""))
-        if not created_at:
-            continue
-        run_created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-        if run_created >= started_at:
-            return _workflow_run_data(run, started_at_text)
+        if str(run.get("id")) not in known_run_ids:
+            return _workflow_run_data(
+                run,
+                started_at_text,
+                known_run_ids,
+            )
 
     return run_state
 
