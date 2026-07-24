@@ -327,8 +327,17 @@ summary_cols[3].metric("目前課別", st.session_state.current_department)
 
 st.divider()
 
+# 「主要權限」屬於敏感管理資料，只有開發者等級 9 驗證後才顯示。
+# 權限 6～8 仍可依既有規則管理人員，但一般名單不公開權限數字。
+developer_permission_visible = (
+    management_unlocked
+    and int(st.session_state.get("management_role_level", 0) or 0) >= 9
+)
+
 # 所有部門共用同一組欄位、順序、寬度與表格高度，避免各表格隨內容偏移。
-PERSONNEL_COLUMNS = ["課別", "姓名", "帳號／工號", "Email", "本課職務", "主要權限"]
+PERSONNEL_COLUMNS = ["課別", "姓名", "帳號／工號", "Email", "本課職務"]
+if developer_permission_visible:
+    PERSONNEL_COLUMNS.append("主要權限")
 PERSONNEL_COLUMN_CONFIG = {
     "課別": st.column_config.TextColumn("課別", width="medium"),
     "姓名": st.column_config.TextColumn("姓名", width="small"),
@@ -394,7 +403,7 @@ if management_unlocked:
 
     operator_level = int(st.session_state.get("management_role_level", 0) or 0)
 
-    if operator_level >= 6:
+    if operator_level >= 7:
         with st.container(border=True):
             st.subheader("🔄 Microsoft 365 人員同步")
             st.caption(
