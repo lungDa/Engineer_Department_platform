@@ -16,7 +16,7 @@ if load_dotenv:
 
 
 def _get_secret(name: str, default: str = "") -> str:
-    """Read Render/local env first, then Streamlit Cloud secrets."""
+    """Read Render/local env first, then common Streamlit secret layouts."""
     env_value = os.getenv(name)
     if env_value is not None and str(env_value).strip():
         return str(env_value).strip()
@@ -24,14 +24,20 @@ def _get_secret(name: str, default: str = "") -> str:
     try:
         import streamlit as st
 
-        value = st.secrets.get(name, default)
-        if value is not None and str(value).strip():
-            return str(value).strip()
+        aliases = (name, name.lower())
+        for key in aliases:
+            value = st.secrets.get(key, default)
+            if value is not None and str(value).strip():
+                return str(value).strip()
 
-        # Also accept an optional [line] section in secrets.toml.
-        line_secrets = st.secrets.get("line", {})
-        nested_value = line_secrets.get(name, default)
-        return str(nested_value).strip() if nested_value is not None else default
+        # Accept both [line] and [LINE], with upper- or lower-case keys.
+        for section_name in ("line", "LINE"):
+            line_secrets = st.secrets.get(section_name, {})
+            for key in aliases:
+                nested_value = line_secrets.get(key, default)
+                if nested_value is not None and str(nested_value).strip():
+                    return str(nested_value).strip()
+        return default
     except Exception:
         return default
 

@@ -134,8 +134,11 @@ class LineService(BaseService):
 
     def broadcast_text(self, text: str) -> dict:
         """Broadcast one event to every friend of the official account."""
-        if not self.is_configured():
-            return failed("LINE 尚未設定 Channel Secret / Access Token。")
+        # Sending a broadcast only needs the channel access token. The channel
+        # secret is required for validating inbound webhook signatures, not for
+        # outbound broadcast requests.
+        if not get_settings().line_channel_access_token:
+            return failed("LINE 尚未設定 Channel Access Token。")
 
         payload = {
             "messages": [
