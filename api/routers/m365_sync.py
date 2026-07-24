@@ -1,4 +1,5 @@
 import hmac
+import re
 from datetime import datetime
 
 from fastapi import APIRouter, Header, HTTPException, status
@@ -19,6 +20,8 @@ M365_SYNC_SCOPE = "工程一部"
 
 
 class M365User(BaseModel):
+    """GitHub Actions 傳入的 Microsoft 365 人員資料。"""
+
     model_config = ConfigDict(extra="ignore")
 
     # Microsoft 365 未填寫的欄位可能回傳 null。
@@ -31,22 +34,38 @@ class M365User(BaseModel):
     m365_id: str | None = Field(default="", max_length=200)
 
 
+def _normalized(value: object) -> str:
+    """統一比對格式，避免大小寫及前後空白造成重複人員。"""
+    return str(value or "").strip().casefold()
+
+
 def _extract_account(value: object) -> str:
-    """從 M365 電子郵件取得平台帳號。"""
+    """
+    從 M365 電子郵件或 UPN 取得平台帳號，只保留 @ 前的數字。
+
+    範例：
+    0398@retech.com.tw -> 0398
+    "0398"@retech.com.tw -> 0398
+
+    回傳字串以保留帳號開頭的 0。
+    """
     raw_value = str(value or "").strip()
 
     if not raw_value:
         return ""
 
     account_prefix = raw_value.split("@", 1)[0]
-    return account_prefix.strip().strip('"').strip("'")
+    account_prefix = account_prefix.strip().strip('"').strip("'")
+    match = re.search(r"\d+", account_prefix)
+
+    return match.group(0) if match else ""
 
 
 def _verify_token(
     received_token: str | None,
     authorization: str | None,
 ) -> None:
-    """驗證同步請求使用的權杖。"""
+    """驗證 GitHub Actions 傳入的同步權杖。"""
     expected = get_settings().m365_webhook_token.strip()
 
     if not expected:
@@ -81,14 +100,15 @@ def _find_existing_index(
     1. Microsoft 365 ID
     2. Microsoft 365 UPN
     3. Email
-    4. 平台帳號
+    4. 平台帳號（只使用信箱 @ 前的數字）
     5. 唯一姓名
     """
+    account = _extract_account(incoming.upn or incoming.email)
     candidates = (
         ("m365_id", incoming.m365_id),
         ("m365_upn", incoming.upn),
         ("email", incoming.email or incoming.upn),
-        ("account", incoming.upn or incoming.email),
+        ("account", account),
     )
 
     for field, value in candidates:
@@ -101,7 +121,7 @@ def _find_existing_index(
             if _normalized(user.get(field)) == needle:
                 return index
 
-    # 只有平台內同名人員剛好一筆時，才允許使用姓名比對。
+    # 只有平台內同名人員剛好一筆時，才允許用姓名比對。
     name = _normalized(incoming.name)
 
     if not name:
@@ -128,18 +148,16 @@ def sync_m365_users(
     """
     Microsoft 365 工程一部手動安全同步。
 
-    同步內容：
-    - 更新 M365 ID、UPN、Email、電話等基本資料
-    - 更新 M365 原始部門與原始職稱
-    - 新增第一次出現的 M365 成員
-    - 新成員的預設平台部門為「待分類」
+    執行內容：
+    - 更新既有人員的 M365 基本資料
+    - 將 account 更新為 UPN／Email 的數字前綴
+    - 新增第一次出現的工程一部成員
     - 將本次同步成員維持為啟用
 
-    不會處理：
-    - 不覆蓋平台手動設定的部門
-    - 不覆蓋平台角色、職務及權限
+    安全限制：
+    - 不覆蓋既有人員的平台部門、課別、職務、角色及權限
     - 不覆蓋密碼、兼任資料及 LINE ID
-    - 不停用未出現在 M365 群組中的人員
+    - 不停用未出現在群組中的人員
     - 不刪除任何人員
     """
     _verify_token(
@@ -156,7 +174,7 @@ def sync_m365_users(
     if len(payload) > 1000:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="單次最多同步1000位人員。",
+            detail="單次最多同步 1000 位人員。",
         )
 
     users = user_repository.get_all()
@@ -185,33 +203,39 @@ def sync_m365_users(
             or incoming.upn
             or ""
         ).strip()
-
         upn = str(incoming.upn or "").strip()
         name = str(incoming.name or "").strip()
         m365_id = str(incoming.m365_id or "").strip()
+        account = _extract_account(upn or email)
+        m365_department = str(
+            incoming.department or ""
+        ).strip()
+        m365_job_title = str(
+            incoming.job_title or ""
+        ).strip()
 
-        # 姓名與任一帳號識別資料不可同時缺少。
+        # 姓名與任一穩定識別資料不可同時缺少。
         if not name or not (email or upn or m365_id):
+            skipped += 1
+            continue
+
+        # 平台帳號必須能從 UPN／Email 取得數字。
+        if not account:
             skipped += 1
             continue
 
         index = _find_existing_index(users, incoming)
 
-        # 這些欄位由 Microsoft 365 管理。
-        # 不包含平台 department、role 或 role_level。
+        # 這些欄位由 Microsoft 365 同步管理。
+        # department、job_title 等平台管理欄位不放在此處，
+        # 避免覆蓋使用者於平台或 Google Sheet 的手動設定。
         m365_fields = {
             "name": name,
             "email": email,
             "m365_upn": upn,
-            "m365_department": str(
-                incoming.department or ""
-            ).strip(),
-            "m365_job_title": str(
-                incoming.job_title or ""
-            ).strip(),
-            "mobile": str(
-                incoming.mobile or ""
-            ).strip(),
+            "m365_department": m365_department,
+            "m365_job_title": m365_job_title,
+            "mobile": str(incoming.mobile or "").strip(),
             "m365_id": m365_id,
             "sync_source": M365_SYNC_SOURCE,
             "m365_scope": M365_SYNC_SCOPE,
@@ -219,22 +243,22 @@ def sync_m365_users(
         }
 
         if index is not None:
-            # 僅更新 Microsoft 365 管理的欄位。
-            # 平台部門、角色、權限及兼任設定都會保留。
             users[index].update(m365_fields)
+            users[index]["account"] = account
             users[index]["active"] = "TRUE"
 
             updated += 1
             marked += 1
             continue
 
-        # 第一次同步的新成員先放入「待分類」。
+        # 新進人員尚無平台管理資料，因此建立安全預設值。
         users.append(
             {
                 "id": next_id,
-                "account": upn or email,
-                "department": "待分類",
+                "account": account,
                 "password": UserService.DEFAULT_PASSWORD,
+                "department": M365_SYNC_SCOPE,
+                "job_title": m365_job_title or "助理工程師",
                 "role": "助理工程師",
                 "role_level": 0,
                 "active": "TRUE",
@@ -273,5 +297,4 @@ def sync_m365_users(
         "disabled": 0,
         "deleted": 0,
         "total_users": len(users),
-        "synced_at": now,
     }
