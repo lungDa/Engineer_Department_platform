@@ -394,7 +394,7 @@ if management_unlocked:
 
     operator_level = int(st.session_state.get("management_role_level", 0) or 0)
 
-    if operator_level >= 7:
+    if operator_level >= 6:
         with st.container(border=True):
             st.subheader("🔄 Microsoft 365 人員同步")
             st.caption(
