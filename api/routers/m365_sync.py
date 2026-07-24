@@ -40,7 +40,7 @@ def _verify_token(
     received_token: str | None,
     authorization: str | None,
 ) -> None:
-    """驗證 GitHub Actions 傳入的同步權杖。"""
+    """驗證同步請求使用的權杖。"""
     expected = get_settings().m365_webhook_token.strip()
 
     if not expected:
@@ -95,7 +95,7 @@ def _find_existing_index(
             if _normalized(user.get(field)) == needle:
                 return index
 
-    # 只有平台內同名人員剛好一筆時，才允許用姓名比對。
+    # 只有平台內同名人員剛好一筆時，才允許使用姓名比對。
     name = _normalized(incoming.name)
 
     if not name:
@@ -120,18 +120,21 @@ def sync_m365_users(
     authorization: str | None = Header(default=None),
 ):
     """
-    Microsoft 365 工程一部日常安全同步。
+    Microsoft 365 工程一部手動安全同步。
 
-    執行內容：
-    - 更新既有工程一部成員
-    - 新增第一次出現的工程一部成員
+    同步內容：
+    - 更新 M365 ID、UPN、Email、電話等基本資料
+    - 更新 M365 原始部門與原始職稱
+    - 新增第一次出現的 M365 成員
+    - 新成員的預設平台部門為「待分類」
     - 將本次同步成員維持為啟用
-    - 保留平台密碼、權限、兼任資料及 LINE ID
 
-    暫不執行：
-    - 不停用未出現在群組中的人員
+    不會處理：
+    - 不覆蓋平台手動設定的部門
+    - 不覆蓋平台角色、職務及權限
+    - 不覆蓋密碼、兼任資料及 LINE ID
+    - 不停用未出現在 M365 群組中的人員
     - 不刪除任何人員
-    - 不再執行 ID 36～235 的一次性清理
     """
     _verify_token(
         x_m365_webhook_token,
@@ -188,6 +191,8 @@ def sync_m365_users(
 
         index = _find_existing_index(users, incoming)
 
+        # 這些欄位由 Microsoft 365 管理。
+        # 不包含平台 department、role 或 role_level。
         m365_fields = {
             "name": name,
             "email": email,
@@ -195,11 +200,7 @@ def sync_m365_users(
             "m365_department": str(
                 incoming.department or ""
             ).strip(),
-            "department": (
-                str(incoming.department or "").strip()
-                or M365_SYNC_SCOPE
-            ),
-            "job_title": str(
+            "m365_job_title": str(
                 incoming.job_title or ""
             ).strip(),
             "mobile": str(
@@ -213,7 +214,7 @@ def sync_m365_users(
 
         if index is not None:
             # 僅更新 Microsoft 365 管理的欄位。
-            # 不覆蓋密碼、角色、權限、兼任資料及 LINE ID。
+            # 平台部門、角色、權限及兼任設定都會保留。
             users[index].update(m365_fields)
             users[index]["active"] = "TRUE"
 
@@ -221,10 +222,12 @@ def sync_m365_users(
             marked += 1
             continue
 
+        # 第一次同步的新成員先放入「待分類」。
         users.append(
             {
                 "id": next_id,
                 "account": upn or email,
+                "department": "待分類",
                 "password": UserService.DEFAULT_PASSWORD,
                 "role": "助理工程師",
                 "role_level": 0,
@@ -253,8 +256,8 @@ def sync_m365_users(
 
     return {
         "ok": True,
-        "message": "Microsoft 365 工程一部日常安全同步完成。",
-        "phase": "daily_safe_sync",
+        "message": "Microsoft 365 工程一部手動安全同步完成。",
+        "phase": "manual_safe_sync",
         "scope": M365_SYNC_SCOPE,
         "received": len(payload),
         "created": created,
@@ -264,4 +267,5 @@ def sync_m365_users(
         "disabled": 0,
         "deleted": 0,
         "total_users": len(users),
+        "synced_at": now,
     }
