@@ -31,9 +31,15 @@ class M365User(BaseModel):
     m365_id: str | None = Field(default="", max_length=200)
 
 
-def _normalized(value: object) -> str:
-    """統一比較格式，避免大小寫及前後空白造成重複人員。"""
-    return str(value or "").strip().casefold()
+def _extract_account(value: object) -> str:
+    """從 M365 電子郵件取得平台帳號。"""
+    raw_value = str(value or "").strip()
+
+    if not raw_value:
+        return ""
+
+    account_prefix = raw_value.split("@", 1)[0]
+    return account_prefix.strip().strip('"').strip("'")
 
 
 def _verify_token(
