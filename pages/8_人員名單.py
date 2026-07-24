@@ -1,9 +1,116 @@
+import json
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+
 import pandas as pd
 import streamlit as st
 
 from config.departments import DEPARTMENTS
 from config.roles import ROLE_LEVELS
 from utils import AppInitializer, UserService, parse_int
+
+
+M365_WORKFLOW_FILE = "m365-sync.yml"
+M365_WORKFLOW_BRANCH = "main"
+
+
+def _github_settings() -> tuple[str, str, str]:
+    """從 Streamlit Secrets 取得 GitHub Actions 手動觸發設定。"""
+    github = st.secrets.get("github", {})
+    repository = str(github.get("repository", "")).strip()
+    token = str(github.get("token", "")).strip()
+    workflow = str(github.get("m365_workflow", M365_WORKFLOW_FILE)).strip()
+
+    if "/" not in repository:
+        raise ValueError(
+            "Streamlit Secrets 的 github.repository 必須使用「擁有者/儲存庫」格式。"
+        )
+    if not token:
+        raise ValueError("Streamlit Secrets 尚未設定 github.token。")
+
+    return repository, token, workflow
+
+
+def _github_api(
+    method: str,
+    path: str,
+    token: str,
+    payload: dict | None = None,
+) -> dict:
+    """呼叫 GitHub API；權杖不會顯示在頁面或寫入紀錄。"""
+    body = None
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+
+    request = urllib.request.Request(
+        f"https://api.github.com{path}",
+        data=body,
+        method=method,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "Engineer-Department-Platform",
+            "Content-Type": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            content = response.read().decode("utf-8")
+            return json.loads(content) if content else {}
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        try:
+            message = json.loads(detail).get("message", detail)
+        except json.JSONDecodeError:
+            message = detail
+        raise RuntimeError(f"GitHub API {exc.code}：{message}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"無法連線 GitHub：{exc.reason}") from exc
+
+
+def _trigger_m365_workflow() -> dict:
+    """觸發 M365 工作流程並等待取得這次執行紀錄。"""
+    repository, token, workflow = _github_settings()
+    encoded_workflow = urllib.parse.quote(workflow, safe="")
+    started_at = datetime.now(timezone.utc)
+
+    _github_api(
+        "POST",
+        f"/repos/{repository}/actions/workflows/{encoded_workflow}/dispatches",
+        token,
+        {"ref": M365_WORKFLOW_BRANCH},
+    )
+
+    # workflow_dispatch 接受後通常需數秒才會建立 run。
+    for _ in range(15):
+        time.sleep(2)
+        result = _github_api(
+            "GET",
+            (
+                f"/repos/{repository}/actions/workflows/{encoded_workflow}/runs"
+                f"?event=workflow_dispatch&branch={M365_WORKFLOW_BRANCH}&per_page=10"
+            ),
+            token,
+        )
+        for run in result.get("workflow_runs", []):
+            created_at = str(run.get("created_at", ""))
+            if not created_at:
+                continue
+            run_created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            if run_created >= started_at:
+                return {
+                    "id": run.get("id"),
+                    "status": run.get("status", "queued"),
+                    "conclusion": run.get("conclusion"),
+                    "html_url": run.get("html_url", ""),
+                }
+
+    raise RuntimeError("工作流程已送出，但尚未取得執行紀錄；請稍後到 GitHub Actions 查看。")
 
 
 st.set_page_config(page_title="人員名單｜課別分類", layout="wide")
@@ -131,7 +238,54 @@ for department in DEPARTMENTS:
 if management_unlocked:
     st.divider()
     st.subheader("🛠️ 開發者｜人員名單管理")
-    st.caption("此區只會在首頁完成開發者密碼驗證後顯示。")
+    st.caption("此區只會在人員管理權限驗證成功後顯示。")
+
+    operator_level = int(st.session_state.get("management_role_level", 0) or 0)
+
+    if operator_level >= 7:
+        with st.container(border=True):
+            st.subheader("🔄 Microsoft 365 人員同步")
+            st.caption(
+                "僅在按下按鈕後執行。同步會新增或更新 M365 基本資料，"
+                "不覆蓋平台部門、課別、職務、權限及兼任資料，也不會停用或刪除人員。"
+            )
+
+            confirm_m365_sync = st.checkbox(
+                "我確認要從 Microsoft 365 取得最新人員資料",
+                key="confirm_m365_sync",
+            )
+            if st.button(
+                "🔄 與 M365 系統同步",
+                type="primary",
+                disabled=not confirm_m365_sync,
+                key="trigger_m365_sync",
+            ):
+                with st.spinner("正在啟動 Microsoft 365 人員同步，請勿重複點擊…"):
+                    try:
+                        run = _trigger_m365_workflow()
+                    except (ValueError, RuntimeError) as exc:
+                        st.error(f"同步啟動失敗：{exc}")
+                    else:
+                        st.session_state["m365_sync_run"] = run
+                        st.session_state["confirm_m365_sync"] = False
+                        st.success("同步工作已成功送出，GitHub Actions 正在執行。")
+
+            latest_run = st.session_state.get("m365_sync_run")
+            if latest_run:
+                status_text = {
+                    "queued": "排隊中",
+                    "in_progress": "執行中",
+                    "completed": "已完成",
+                }.get(latest_run.get("status"), latest_run.get("status", "未知"))
+                st.info(f"最近一次同步狀態：{status_text}")
+                if latest_run.get("html_url"):
+                    st.link_button(
+                        "查看 GitHub Actions 執行結果",
+                        latest_run["html_url"],
+                        width="stretch",
+                    )
+    else:
+        st.info("🔒「與 M365 系統同步」僅限權限等級 7～9 使用。")
 
     manage_department = st.selectbox(
         "管理課別",
@@ -140,7 +294,6 @@ if management_unlocked:
         key="personnel_manage_department",
     )
     department_users = UserService.get_users_by_department(manage_department, active_only=False)
-    operator_level = int(st.session_state.get("management_role_level", 0) or 0)
     manageable_users = [
         user for user in department_users
         if UserService.effective_role_level(user) <= operator_level
