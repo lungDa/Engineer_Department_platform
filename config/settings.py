@@ -16,7 +16,7 @@ if load_dotenv:
 
 
 def _get_secret(name: str, default: str = "") -> str:
-    """Read Render/local env first, then common Streamlit secret layouts."""
+    """Read environment variables first, then common Streamlit layouts."""
     env_value = os.getenv(name)
     if env_value is not None and str(env_value).strip():
         return str(env_value).strip()
@@ -30,13 +30,18 @@ def _get_secret(name: str, default: str = "") -> str:
             if value is not None and str(value).strip():
                 return str(value).strip()
 
-        # Accept both [line] and [LINE], with upper- or lower-case keys.
-        for section_name in ("line", "LINE"):
-            line_secrets = st.secrets.get(section_name, {})
+        section_aliases = {
+            "LINE_CHANNEL_SECRET": ("line", "LINE"),
+            "LINE_CHANNEL_ACCESS_TOKEN": ("line", "LINE"),
+            "M365_WEBHOOK_TOKEN": ("m365", "M365"),
+            "API_BASE_URL": ("api", "API"),
+        }
+        for section_name in section_aliases.get(name, ()):
+            section = st.secrets.get(section_name, {})
             for key in aliases:
-                nested_value = line_secrets.get(key, default)
-                if nested_value is not None and str(nested_value).strip():
-                    return str(nested_value).strip()
+                value = section.get(key, default)
+                if value is not None and str(value).strip():
+                    return str(value).strip()
         return default
     except Exception:
         return default
@@ -45,24 +50,32 @@ def _get_secret(name: str, default: str = "") -> str:
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Engineer Department Platform")
-    app_version: str = os.getenv("APP_VERSION", "V5.6.0 Microsoft 365 Notifications Foundation")
+    app_version: str = os.getenv(
+        "APP_VERSION",
+        "V5.6.0 Microsoft 365 Notifications Foundation",
+    )
     environment: str = os.getenv("ENVIRONMENT", "development")
 
     streamlit_base_url: str = os.getenv("STREAMLIT_BASE_URL", "")
-    api_base_url: str = os.getenv("API_BASE_URL", "")
+    api_base_url: str = _get_secret(
+        "API_BASE_URL",
+        "https://engineer-department-platform.onrender.com",
+    )
 
     google_sheet_id: str = os.getenv("GOOGLE_SHEET_ID", "")
-    google_service_account_json: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    google_service_account_json: str = os.getenv(
+        "GOOGLE_SERVICE_ACCOUNT_JSON",
+        "",
+    )
 
     line_channel_secret: str = _get_secret("LINE_CHANNEL_SECRET")
     line_channel_access_token: str = _get_secret("LINE_CHANNEL_ACCESS_TOKEN")
 
     teams_webhook_url: str = os.getenv("TEAMS_WEBHOOK_URL", "")
     outlook_webhook_url: str = os.getenv("OUTLOOK_WEBHOOK_URL", "")
-    m365_webhook_token: str = os.getenv("M365_WEBHOOK_TOKEN", "")
+    m365_webhook_token: str = _get_secret("M365_WEBHOOK_TOKEN")
 
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
-
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
     @property

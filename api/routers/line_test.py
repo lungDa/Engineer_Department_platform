@@ -19,6 +19,10 @@ TAIPEI = ZoneInfo("Asia/Taipei")
 LINE_BROADCAST_URL = "https://api.line.me/v2/bot/message/broadcast"
 
 
+class LineMessageRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=5000)
+
+
 class LineTestRequest(BaseModel):
     message: str = Field(
         default="開發工程部平台 LINE 通知測試成功。",
@@ -47,7 +51,7 @@ def _verify_token(
     if not supplied or not hmac.compare_digest(supplied, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="測試通知 Token 無效。",
+            detail="通知 Token 無效。",
         )
 
 
@@ -61,44 +65,11 @@ def _line_access_token() -> str:
     return token
 
 
-@router.get("/status")
-def line_status():
-    return {
-        "status": "ok",
-        "configured": bool(
-            os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
-            and os.getenv("LINE_CHANNEL_SECRET", "").strip()
-        ),
-        "channel_access_token": bool(
-            os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
-        ),
-        "channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET", "").strip()),
-    }
-
-
-@router.post("/test")
-def send_line_test(
-    payload: LineTestRequest,
-    x_m365_webhook_token: str | None = Header(
-        default=None,
-        alias="X-M365-Webhook-Token",
-    ),
-    authorization: str | None = Header(default=None),
-):
-    _verify_token(x_m365_webhook_token, authorization)
+def _broadcast(message: str) -> dict:
     access_token = _line_access_token()
     now = datetime.now(TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
     body = {
-        "messages": [
-            {
-                "type": "text",
-                "text": (
-                    f"【開發工程部平台】\n"
-                    f"{payload.message.strip()}\n"
-                    f"測試時間：{now}"
-                ),
-            }
-        ],
+        "messages": [{"type": "text", "text": message.strip()[:5000]}],
         "notificationDisabled": False,
     }
     request = Request(
@@ -129,9 +100,54 @@ def send_line_test(
 
     return {
         "status": "ok",
-        "message": "LINE 測試通知已送出。",
         "delivery": "broadcast",
         "line_status_code": response_status,
         "line_request_id": request_id,
         "sent_at": now,
     }
+
+
+@router.get("/status")
+def line_status():
+    return {
+        "status": "ok",
+        "configured": bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip()),
+        "channel_access_token": bool(
+            os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
+        ),
+        "channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET", "").strip()),
+    }
+
+
+@router.post("/send")
+def send_line_notification(
+    payload: LineMessageRequest,
+    x_m365_webhook_token: str | None = Header(
+        default=None,
+        alias="X-M365-Webhook-Token",
+    ),
+    authorization: str | None = Header(default=None),
+):
+    """Relay a platform notification through Render to LINE."""
+    _verify_token(x_m365_webhook_token, authorization)
+    result = _broadcast(payload.message)
+    result["message"] = "LINE 通知已送出。"
+    return result
+
+
+@router.post("/test")
+def send_line_test(
+    payload: LineTestRequest,
+    x_m365_webhook_token: str | None = Header(
+        default=None,
+        alias="X-M365-Webhook-Token",
+    ),
+    authorization: str | None = Header(default=None),
+):
+    _verify_token(x_m365_webhook_token, authorization)
+    now = datetime.now(TAIPEI).strftime("%Y-%m-%d %H:%M:%S")
+    result = _broadcast(
+        f"【開發工程部平台】\n{payload.message.strip()}\n測試時間：{now}"
+    )
+    result["message"] = "LINE 測試通知已送出。"
+    return result
