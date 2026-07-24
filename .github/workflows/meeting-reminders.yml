@@ -1,0 +1,32 @@
+name: Meeting Reminders
+
+on:
+  schedule:
+    # GitHub Actions 使用 UTC；00:00 UTC = 台灣時間 08:00。
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Wake Render API
+        run: |
+          curl --fail --silent --show-error \
+            --retry 5 \
+            --retry-delay 15 \
+            --retry-all-errors \
+            "https://engineer-department-platform.onrender.com/health"
+
+      - name: Send next-day meeting reminders
+        env:
+          M365_WEBHOOK_TOKEN: ${{ secrets.M365_WEBHOOK_TOKEN }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Content-Type: application/json" \
+            --header "X-M365-Webhook-Token: ${M365_WEBHOOK_TOKEN}" \
+            --data '{"days_before":1,"channels":["teams","outlook"]}' \
+            "https://engineer-department-platform.onrender.com/api/meetings/reminders/run"
