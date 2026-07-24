@@ -17,20 +17,11 @@ router = APIRouter(
 M365_SYNC_SOURCE = "m365"
 M365_SYNC_SCOPE = "工程一部"
 
-# 原平台人員固定保護範圍
-PROTECTED_USER_IDS = set(range(1, 36))
-
-# 2026/07/23 首次錯誤同步產生的資料範圍
-CLEANUP_FIRST_ID = 36
-CLEANUP_LAST_ID = 235
-
-# 安全鎖：實際停用數必須完全相符
-EXPECTED_DISABLE_COUNT = 193
-
 
 class M365User(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    # Microsoft 365 未填寫的欄位可能回傳 null。
     name: str | None = Field(default="", max_length=200)
     email: str | None = Field(default="", max_length=320)
     upn: str | None = Field(default="", max_length=320)
@@ -41,7 +32,7 @@ class M365User(BaseModel):
 
 
 def _normalized(value: object) -> str:
-    """統一比較格式，避免大小寫或空白造成比對失敗。"""
+    """統一比較格式，避免大小寫及前後空白造成重複人員。"""
     return str(value or "").strip().casefold()
 
 
@@ -77,7 +68,16 @@ def _find_existing_index(
     users: list[dict],
     incoming: M365User,
 ) -> int | None:
-    """使用 M365 ID、UPN、Email、帳號及唯一姓名尋找既有人員。"""
+    """
+    依穩定識別資料尋找平台既有人員。
+
+    比對順序：
+    1. Microsoft 365 ID
+    2. Microsoft 365 UPN
+    3. Email
+    4. 平台帳號
+    5. 唯一姓名
+    """
     candidates = (
         ("m365_id", incoming.m365_id),
         ("m365_upn", incoming.upn),
@@ -95,6 +95,7 @@ def _find_existing_index(
             if _normalized(user.get(field)) == needle:
                 return index
 
+    # 只有平台內同名人員剛好一筆時，才允許用姓名比對。
     name = _normalized(incoming.name)
 
     if not name:
@@ -106,7 +107,6 @@ def _find_existing_index(
         if _normalized(user.get("name")) == name
     ]
 
-    # 只有同名資料剛好一筆時，才允許用姓名比對。
     return matches[0] if len(matches) == 1 else None
 
 
@@ -120,16 +120,18 @@ def sync_m365_users(
     authorization: str | None = Header(default=None),
 ):
     """
-    同步工程一部成員，並執行一次性安全清理。
+    Microsoft 365 工程一部日常安全同步。
 
-    保護：
-    - ID 1～35
-    - 本次 M365 工程一部有效成員
+    執行內容：
+    - 更新既有工程一部成員
+    - 新增第一次出現的工程一部成員
+    - 將本次同步成員維持為啟用
+    - 保留平台密碼、權限、兼任資料及 LINE ID
 
-    清理：
-    - 僅限 ID 36～235
-    - 僅停用，不刪除
-    - 停用數不是193時不寫入
+    暫不執行：
+    - 不停用未出現在群組中的人員
+    - 不刪除任何人員
+    - 不再執行 ID 36～235 的一次性清理
     """
     _verify_token(
         x_m365_webhook_token,
@@ -152,7 +154,10 @@ def sync_m365_users(
 
     next_id = (
         max(
-            (parse_int(user.get("id"), 0) for user in users),
+            (
+                parse_int(user.get("id"), 0)
+                for user in users
+            ),
             default=0,
         )
         + 1
@@ -165,9 +170,6 @@ def sync_m365_users(
     skipped = 0
     marked = 0
 
-    # 記錄本次真正出現在工程一部群組中的平台ID。
-    current_scope_user_ids: set[int] = set()
-
     for incoming in payload:
         email = str(
             incoming.email
@@ -179,6 +181,7 @@ def sync_m365_users(
         name = str(incoming.name or "").strip()
         m365_id = str(incoming.m365_id or "").strip()
 
+        # 姓名與任一帳號識別資料不可同時缺少。
         if not name or not (email or upn or m365_id):
             skipped += 1
             continue
@@ -209,23 +212,18 @@ def sync_m365_users(
         }
 
         if index is not None:
+            # 僅更新 Microsoft 365 管理的欄位。
+            # 不覆蓋密碼、角色、權限、兼任資料及 LINE ID。
             users[index].update(m365_fields)
             users[index]["active"] = "TRUE"
-
-            existing_id = parse_int(users[index].get("id"), 0)
-
-            if existing_id > 0:
-                current_scope_user_ids.add(existing_id)
 
             updated += 1
             marked += 1
             continue
 
-        new_user_id = next_id
-
         users.append(
             {
-                "id": new_user_id,
+                "id": next_id,
                 "account": upn or email,
                 "password": UserService.DEFAULT_PASSWORD,
                 "role": "助理工程師",
@@ -240,76 +238,30 @@ def sync_m365_users(
             }
         )
 
-        current_scope_user_ids.add(new_user_id)
         next_id += 1
         created += 1
         marked += 1
-
-    # 本次應有26位有效工程一部成員。
-    if marked != 26:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"安全檢查未通過：本次有效工程一部人數為{marked}，"
-                "預期為26。未寫入任何資料，也未停用任何人。"
-            ),
-        )
-
-    disable_indexes: list[int] = []
-
-    for index, user in enumerate(users):
-        user_id = parse_int(user.get("id"), 0)
-
-        # 永久保護原平台 ID 1～35。
-        if user_id in PROTECTED_USER_IDS:
-            continue
-
-        # 保護本次出現在工程一部群組中的人員。
-        if user_id in current_scope_user_ids:
-            continue
-
-        # 只處理首次錯誤同步的固定ID範圍。
-        if not CLEANUP_FIRST_ID <= user_id <= CLEANUP_LAST_ID:
-            continue
-
-        disable_indexes.append(index)
-
-    # 寫入前的最後安全鎖。
-    if len(disable_indexes) != EXPECTED_DISABLE_COUNT:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"安全檢查未通過：計算停用人數為{len(disable_indexes)}，"
-                f"預期為{EXPECTED_DISABLE_COUNT}。"
-                "未寫入任何資料，也未停用任何人。"
-            ),
-        )
-
-    for index in disable_indexes:
-        users[index]["active"] = "FALSE"
-        users[index]["updated_at"] = now
 
     if not user_repository.save_all(users):
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=(
-                "M365 人員資料已完成計算，"
+                "M365 人員已接收，"
                 "但寫入 Google Sheet Users 失敗。"
             ),
         )
 
     return {
         "ok": True,
-        "message": "工程一部同步及舊錯誤同步人員停用完成。",
-        "phase": "safe_cleanup",
+        "message": "Microsoft 365 工程一部日常安全同步完成。",
+        "phase": "daily_safe_sync",
         "scope": M365_SYNC_SCOPE,
         "received": len(payload),
         "created": created,
         "updated": updated,
         "marked": marked,
         "skipped": skipped,
-        "protected_original": len(PROTECTED_USER_IDS),
-        "disabled": len(disable_indexes),
+        "disabled": 0,
         "deleted": 0,
         "total_users": len(users),
     }
