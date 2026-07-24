@@ -74,7 +74,7 @@ def _github_api(
 
 
 def _trigger_m365_workflow() -> dict:
-    """觸發 M365 工作流程並等待取得這次執行紀錄。"""
+    """觸發 M365 工作流程；取得執行紀錄則一併回傳。"""
     repository, token, workflow = _github_settings()
     encoded_workflow = urllib.parse.quote(workflow, safe="")
     started_at = datetime.now(timezone.utc)
@@ -108,9 +108,21 @@ def _trigger_m365_workflow() -> dict:
                     "status": run.get("status", "queued"),
                     "conclusion": run.get("conclusion"),
                     "html_url": run.get("html_url", ""),
+                    "record_found": True,
                 }
 
-    raise RuntimeError("工作流程已送出，但尚未取得執行紀錄；請稍後到 GitHub Actions 查看。")
+    # GitHub 已接受 workflow_dispatch，但新 run 偶爾不會立即出現在查詢結果。
+    # 這不是啟動失敗，因此回傳「已送出」狀態，避免誤顯示紅色錯誤。
+    return {
+        "id": None,
+        "status": "submitted",
+        "conclusion": None,
+        "html_url": (
+            f"https://github.com/{repository}/actions/workflows/"
+            f"{encoded_workflow}"
+        ),
+        "record_found": False,
+    }
 
 
 st.set_page_config(page_title="人員名單｜課別分類", layout="wide")
@@ -267,11 +279,21 @@ if management_unlocked:
                         st.error(f"同步啟動失敗：{exc}")
                     else:
                         st.session_state["m365_sync_run"] = run
-                        st.success("同步工作已成功送出，GitHub Actions 正在執行。")
+                        if run.get("record_found"):
+                            st.success(
+                                "同步工作已成功送出，GitHub Actions 正在執行。"
+                            )
+                        else:
+                            st.success("同步工作已成功送出。")
+                            st.info(
+                                "GitHub 尚未顯示新的執行紀錄，"
+                                "請稍後到 GitHub Actions 查看；請勿重複點擊。"
+                            )
 
             latest_run = st.session_state.get("m365_sync_run")
             if latest_run:
                 status_text = {
+                    "submitted": "已送出，等待 GitHub 建立執行紀錄",
                     "queued": "排隊中",
                     "in_progress": "執行中",
                     "completed": "已完成",
