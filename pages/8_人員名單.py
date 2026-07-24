@@ -3,7 +3,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
@@ -15,6 +15,7 @@ from utils import AppInitializer, UserService, parse_int
 
 M365_WORKFLOW_FILE = "m365-sync.yml"
 M365_WORKFLOW_BRANCH = "main"
+TAIPEI_TIMEZONE = timezone(timedelta(hours=8))
 
 
 def _github_settings() -> tuple[str, str, str]:
@@ -73,11 +74,27 @@ def _github_api(
         raise RuntimeError(f"無法連線 GitHub：{exc.reason}") from exc
 
 
+def _workflow_run_data(run: dict, started_at: str) -> dict:
+    """整理 GitHub Actions 執行資料，供 Session State 安全保存。"""
+    return {
+        "id": run.get("id"),
+        "run_number": run.get("run_number"),
+        "status": run.get("status", "queued"),
+        "conclusion": run.get("conclusion"),
+        "html_url": run.get("html_url", ""),
+        "created_at": run.get("created_at", ""),
+        "updated_at": run.get("updated_at", ""),
+        "started_at": started_at,
+        "record_found": True,
+    }
+
+
 def _trigger_m365_workflow() -> dict:
     """觸發 M365 工作流程；取得執行紀錄則一併回傳。"""
     repository, token, workflow = _github_settings()
     encoded_workflow = urllib.parse.quote(workflow, safe="")
     started_at = datetime.now(timezone.utc)
+    started_at_text = started_at.isoformat()
 
     _github_api(
         "POST",
@@ -103,13 +120,7 @@ def _trigger_m365_workflow() -> dict:
                 continue
             run_created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             if run_created >= started_at:
-                return {
-                    "id": run.get("id"),
-                    "status": run.get("status", "queued"),
-                    "conclusion": run.get("conclusion"),
-                    "html_url": run.get("html_url", ""),
-                    "record_found": True,
-                }
+                return _workflow_run_data(run, started_at_text)
 
     # GitHub 已接受 workflow_dispatch，但新 run 偶爾不會立即出現在查詢結果。
     # 這不是啟動失敗，因此回傳「已送出」狀態，避免誤顯示紅色錯誤。
@@ -121,8 +132,122 @@ def _trigger_m365_workflow() -> dict:
             f"https://github.com/{repository}/actions/workflows/"
             f"{encoded_workflow}"
         ),
+        "started_at": started_at_text,
         "record_found": False,
     }
+
+
+def _refresh_m365_workflow(run_state: dict) -> dict:
+    """查詢本次 M365 同步的最新狀態；必要時先尋找剛建立的 Run。"""
+    repository, token, workflow = _github_settings()
+    run_id = run_state.get("id")
+    started_at_text = str(run_state.get("started_at", ""))
+
+    if run_id:
+        result = _github_api(
+            "GET",
+            f"/repos/{repository}/actions/runs/{run_id}",
+            token,
+        )
+        return _workflow_run_data(result, started_at_text)
+
+    encoded_workflow = urllib.parse.quote(workflow, safe="")
+    result = _github_api(
+        "GET",
+        (
+            f"/repos/{repository}/actions/workflows/{encoded_workflow}/runs"
+            f"?event=workflow_dispatch&branch={M365_WORKFLOW_BRANCH}&per_page=10"
+        ),
+        token,
+    )
+    started_at = (
+        datetime.fromisoformat(started_at_text.replace("Z", "+00:00"))
+        if started_at_text
+        else datetime.now(timezone.utc)
+    )
+    for run in result.get("workflow_runs", []):
+        created_at = str(run.get("created_at", ""))
+        if not created_at:
+            continue
+        run_created = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        if run_created >= started_at:
+            return _workflow_run_data(run, started_at_text)
+
+    return run_state
+
+
+def _format_github_time(value: str) -> str:
+    """將 GitHub UTC 時間轉成台灣時間。"""
+    if not value:
+        return ""
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed.astimezone(TAIPEI_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
+
+
+@st.fragment(run_every=3)
+def _render_m365_sync_status() -> None:
+    """每三秒更新同步狀態，完成後重新載入整個人員名單頁面。"""
+    latest_run = st.session_state.get("m365_sync_run")
+    if not latest_run:
+        return
+
+    if latest_run.get("status") not in {"completed"}:
+        try:
+            latest_run = _refresh_m365_workflow(latest_run)
+        except (ValueError, RuntimeError) as exc:
+            st.warning(f"暫時無法更新同步狀態：{exc}")
+        else:
+            st.session_state["m365_sync_run"] = latest_run
+
+    status = latest_run.get("status", "submitted")
+    conclusion = latest_run.get("conclusion")
+    run_number = latest_run.get("run_number")
+
+    if status == "completed" and conclusion == "success":
+        completed_at = _format_github_time(str(latest_run.get("updated_at", "")))
+        st.success(
+            "✅ Microsoft 365 人員同步更新完成"
+            + (f"（執行 #{run_number}）" if run_number else "")
+        )
+        if completed_at:
+            st.caption(f"完成時間：{completed_at}（台灣時間）")
+
+        # 第一次確認完成時重新執行整個頁面，載入同步後的最新人員資料。
+        refresh_key = f"m365_sync_reloaded_{latest_run.get('id')}"
+        if latest_run.get("id") and not st.session_state.get(refresh_key, False):
+            st.session_state[refresh_key] = True
+            st.rerun(scope="app")
+    elif status == "completed":
+        conclusion_text = {
+            "failure": "執行失敗",
+            "cancelled": "已取消",
+            "timed_out": "執行逾時",
+            "action_required": "需要人工處理",
+        }.get(conclusion, str(conclusion or "結果未知"))
+        st.error(
+            "❌ Microsoft 365 人員同步未完成："
+            f"{conclusion_text}"
+            + (f"（執行 #{run_number}）" if run_number else "")
+        )
+    elif status == "in_progress":
+        st.info(
+            "🔵 Microsoft 365 人員同步執行中"
+            + (f"（執行 #{run_number}）" if run_number else "")
+        )
+    elif status == "queued":
+        st.warning(
+            "🟡 Microsoft 365 人員同步排隊中"
+            + (f"（執行 #{run_number}）" if run_number else "")
+        )
+    else:
+        st.info("🟡 同步要求已送出，正在等待 GitHub 建立執行紀錄。")
+
+    if latest_run.get("html_url"):
+        st.link_button(
+            "查看 GitHub Actions 執行結果",
+            latest_run["html_url"],
+            width="stretch",
+        )
 
 
 st.set_page_config(page_title="人員名單｜課別分類", layout="wide")
@@ -266,10 +391,18 @@ if management_unlocked:
                 "我確認要從 Microsoft 365 取得最新人員資料",
                 key="confirm_m365_sync",
             )
+            latest_run = st.session_state.get("m365_sync_run", {})
+            sync_is_active = latest_run.get("status") in {
+                "submitted",
+                "queued",
+                "in_progress",
+                "waiting",
+                "pending",
+            }
             if st.button(
                 "🔄 與 M365 系統同步",
                 type="primary",
-                disabled=not confirm_m365_sync,
+                disabled=not confirm_m365_sync or sync_is_active,
                 key="trigger_m365_sync",
             ):
                 with st.spinner("正在啟動 Microsoft 365 人員同步，請勿重複點擊…"):
@@ -287,24 +420,10 @@ if management_unlocked:
                             st.success("同步工作已成功送出。")
                             st.info(
                                 "GitHub 尚未顯示新的執行紀錄，"
-                                "請稍後到 GitHub Actions 查看；請勿重複點擊。"
+                                "平台會自動追蹤執行狀態；請勿重複點擊。"
                             )
 
-            latest_run = st.session_state.get("m365_sync_run")
-            if latest_run:
-                status_text = {
-                    "submitted": "已送出，等待 GitHub 建立執行紀錄",
-                    "queued": "排隊中",
-                    "in_progress": "執行中",
-                    "completed": "已完成",
-                }.get(latest_run.get("status"), latest_run.get("status", "未知"))
-                st.info(f"最近一次同步狀態：{status_text}")
-                if latest_run.get("html_url"):
-                    st.link_button(
-                        "查看 GitHub Actions 執行結果",
-                        latest_run["html_url"],
-                        width="stretch",
-                    )
+            _render_m365_sync_status()
     else:
         st.info("🔒「與 M365 系統同步」僅限權限等級 7～9 使用。")
 
