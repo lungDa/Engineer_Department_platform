@@ -15,6 +15,27 @@ if load_dotenv:
     load_dotenv(BASE_DIR / ".env")
 
 
+def _get_secret(name: str, default: str = "") -> str:
+    """Read Render/local env first, then Streamlit Cloud secrets."""
+    env_value = os.getenv(name)
+    if env_value is not None and str(env_value).strip():
+        return str(env_value).strip()
+
+    try:
+        import streamlit as st
+
+        value = st.secrets.get(name, default)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+
+        # Also accept an optional [line] section in secrets.toml.
+        line_secrets = st.secrets.get("line", {})
+        nested_value = line_secrets.get(name, default)
+        return str(nested_value).strip() if nested_value is not None else default
+    except Exception:
+        return default
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = os.getenv("APP_NAME", "Engineer Department Platform")
@@ -27,8 +48,8 @@ class Settings:
     google_sheet_id: str = os.getenv("GOOGLE_SHEET_ID", "")
     google_service_account_json: str = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "")
 
-    line_channel_secret: str = os.getenv("LINE_CHANNEL_SECRET", "")
-    line_channel_access_token: str = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+    line_channel_secret: str = _get_secret("LINE_CHANNEL_SECRET")
+    line_channel_access_token: str = _get_secret("LINE_CHANNEL_ACCESS_TOKEN")
 
     teams_webhook_url: str = os.getenv("TEAMS_WEBHOOK_URL", "")
     outlook_webhook_url: str = os.getenv("OUTLOOK_WEBHOOK_URL", "")
