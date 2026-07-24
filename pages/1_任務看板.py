@@ -199,8 +199,8 @@ with st.expander("➕ 新增任務", expanded=not tasks):
         notify_channels = st.multiselect(
             "建立後通知管道",
             ["Teams", "Outlook", "LINE"],
-            default=["Teams", "Outlook"],
-            help="Outlook 只寄給人員名單中已設定公司 Email 的指派人員。",
+            default=["Teams", "Outlook", "LINE"],
+            help="Outlook 寄給已設定公司 Email 的指派人員；LINE 廣播給官方帳號好友。",
         )
 
         submitted = st.form_submit_button("建立任務", width="stretch")
@@ -382,7 +382,7 @@ def render_task(task):
             edit_notify_channels = st.multiselect(
                 "儲存後通知管道",
                 ["Teams", "Outlook", "LINE"],
-                default=["Teams", "Outlook"],
+                default=["Teams", "Outlook", "LINE"],
                 key=f"notify_channels_{task_id}",
             )
 
@@ -442,7 +442,7 @@ def render_task(task):
             delete_notify_channels = st.multiselect(
                 "刪除後通知管道",
                 ["Teams", "Outlook", "LINE"],
-                default=["Teams", "Outlook"],
+                default=["Teams", "Outlook", "LINE"],
                 key=f"delete_notify_channels_{task_id}",
             )
             delete_submitted = st.form_submit_button(

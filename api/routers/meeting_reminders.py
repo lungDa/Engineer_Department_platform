@@ -34,7 +34,7 @@ LOG_COLUMNS = [
 class ReminderRunRequest(BaseModel):
     days_before: int = Field(default=1, ge=0, le=30)
     channels: list[str] = Field(
-        default_factory=lambda: ["teams", "outlook"],
+        default_factory=lambda: ["teams", "outlook", "line"],
     )
 
 
@@ -103,7 +103,7 @@ def run_meeting_reminders(
 ):
     _verify_token(x_m365_webhook_token, authorization)
 
-    allowed_channels = {"teams", "outlook"}
+    allowed_channels = {"teams", "outlook", "line"}
     channels = list(
         dict.fromkeys(
             str(channel).strip().lower()
@@ -114,7 +114,7 @@ def run_meeting_reminders(
     if not channels:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="至少需要一個有效通知管道：teams 或 outlook。",
+            detail="至少需要一個有效通知管道：teams、outlook 或 line。",
         )
 
     today = datetime.now(TAIPEI).date()

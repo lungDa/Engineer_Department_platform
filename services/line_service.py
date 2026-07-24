@@ -24,6 +24,7 @@ class LineService(BaseService):
 
     REPLY_ENDPOINT = "https://api.line.me/v2/bot/message/reply"
     PUSH_ENDPOINT = "https://api.line.me/v2/bot/message/push"
+    BROADCAST_ENDPOINT = "https://api.line.me/v2/bot/message/broadcast"
 
     def is_configured(self) -> bool:
         settings = get_settings()
@@ -130,6 +131,51 @@ class LineService(BaseService):
         except Exception as exc:
             self.logger.exception("LINE push exception.")
             return failed(f"LINE push exception: {exc}")
+
+    def broadcast_text(self, text: str) -> dict:
+        """Broadcast one event to every friend of the official account."""
+        if not self.is_configured():
+            return failed("LINE 尚未設定 Channel Secret / Access Token。")
+
+        payload = {
+            "messages": [
+                {
+                    "type": "text",
+                    "text": str(text or "")[:5000],
+                }
+            ],
+            "notificationDisabled": False,
+        }
+
+        try:
+            response = requests.post(
+                self.BROADCAST_ENDPOINT,
+                headers=self._headers(),
+                json=payload,
+                timeout=15,
+            )
+            request_id = response.headers.get("x-line-request-id", "")
+            if response.status_code >= 400:
+                self.logger.error(
+                    "LINE broadcast failed: %s %s",
+                    response.status_code,
+                    response.text,
+                )
+                return failed(
+                    f"LINE broadcast failed: {response.status_code}",
+                    response.text,
+                )
+            return success(
+                {
+                    "status_code": response.status_code,
+                    "request_id": request_id,
+                    "delivery": "broadcast",
+                },
+                "LINE 官方帳號廣播已送出。",
+            )
+        except Exception as exc:
+            self.logger.exception("LINE broadcast exception.")
+            return failed(f"LINE broadcast exception: {exc}")
 
     def extract_text_events(self, payload: dict[str, Any]) -> list[dict]:
         events = []

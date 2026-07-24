@@ -72,9 +72,9 @@ with st.expander("➕ 登記新會議", expanded=True):
         m_notes = st.text_area("紀要")
         notify_channels = st.multiselect(
             "建立後通知管道",
-            ["Teams", "Outlook"],
-            default=["Teams", "Outlook"],
-            help="Outlook 只寄給人員名單中已設定公司 Email 的與會者。",
+            ["Teams", "Outlook", "LINE"],
+            default=["Teams", "Outlook", "LINE"],
+            help="Outlook 寄給已設定公司 Email 的與會者；LINE 廣播給官方帳號好友。",
         )
 
         if st.form_submit_button("登記會議"):
@@ -186,8 +186,8 @@ for m in visible:
                 )
                 edit_notify_channels = st.multiselect(
                     "變更後通知管道",
-                    ["Teams", "Outlook"],
-                    default=["Teams", "Outlook"],
+                    ["Teams", "Outlook", "LINE"],
+                    default=["Teams", "Outlook", "LINE"],
                     key=f"edit_notify_channels_{meeting_id}",
                     help="Outlook 只寄給更新後的與會者，且其人員資料須有公司 Email。",
                 )
@@ -254,8 +254,8 @@ for m in visible:
                 )
                 cancel_notify_channels = st.multiselect(
                     "取消後通知管道",
-                    ["Teams", "Outlook"],
-                    default=["Teams", "Outlook"],
+                    ["Teams", "Outlook", "LINE"],
+                    default=["Teams", "Outlook", "LINE"],
                     key=f"cancel_notify_channels_{meeting_id}",
                     help="Outlook 會寄給取消前的與會者。",
                 )

@@ -33,7 +33,7 @@ class NotificationService:
         event: str,
         task: dict,
         actor: str,
-        channels: Iterable[str] = ("teams", "outlook"),
+        channels: Iterable[str] = ("teams", "outlook", "line"),
     ) -> dict:
         enabled = {str(channel).strip().lower() for channel in channels}
         assignees = task.get("assignees") or []
@@ -80,16 +80,7 @@ class NotificationService:
             results["outlook"] = self._skipped("未選擇 Outlook。")
 
         if "line" in enabled:
-            line_ids = [str(user.get("line_user_id", "")).strip() for user in contacts if str(user.get("line_user_id", "")).strip()]
-            if line_ids:
-                sends = [line_service.push_text(line_id, message) for line_id in line_ids]
-                results["line"] = {
-                    "ok": all(item.get("ok") for item in sends),
-                    "message": f"LINE 已處理 {len(sends)} 位收件者。",
-                    "data": sends,
-                }
-            else:
-                results["line"] = self._skipped("指派人員尚未設定 LINE User ID。")
+            results["line"] = line_service.broadcast_text(message)
         else:
             results["line"] = self._skipped("未選擇 LINE。")
 
@@ -105,7 +96,7 @@ class NotificationService:
         event: str,
         meeting: dict,
         actor: str,
-        channels: Iterable[str] = ("teams", "outlook"),
+        channels: Iterable[str] = ("teams", "outlook", "line"),
     ) -> dict:
         enabled = {str(channel).strip().lower() for channel in channels}
         attendees = meeting.get("attendees") or []
@@ -183,6 +174,11 @@ class NotificationService:
             )
         else:
             results["outlook"] = self._skipped("未選擇 Outlook。")
+
+        if "line" in enabled:
+            results["line"] = line_service.broadcast_text(message)
+        else:
+            results["line"] = self._skipped("未選擇 LINE。")
 
         failed_channels = [
             name for name, result in results.items() if not result.get("ok")
