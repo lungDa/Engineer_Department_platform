@@ -420,6 +420,75 @@ def render_task(task):
                     except Exception as exc:
                         st.error(f"任務更新失敗：{exc}")
 
+        st.markdown("##### 🗑️ 刪除任務")
+        st.warning("刪除後任務會從看板隱藏，但資料及操作歷程仍保留在 Google Sheet。")
+        with st.form(f"delete_task_{task_id}"):
+            delete_auth1, delete_auth2 = st.columns(2)
+            with delete_auth1:
+                deleter_account = st.text_input(
+                    "刪除人工號",
+                    key=f"task_deleter_account_{task_id}",
+                )
+            with delete_auth2:
+                deleter_password = st.text_input(
+                    "刪除人密碼",
+                    type="password",
+                    key=f"task_deleter_password_{task_id}",
+                )
+            delete_confirmed = st.checkbox(
+                f"我確認要刪除「{task.get('title', '')}」",
+                key=f"task_delete_confirmed_{task_id}",
+            )
+            delete_notify_channels = st.multiselect(
+                "刪除後通知管道",
+                ["Teams", "Outlook", "LINE"],
+                default=["Teams", "Outlook"],
+                key=f"delete_notify_channels_{task_id}",
+            )
+            delete_submitted = st.form_submit_button(
+                "確認刪除任務",
+                type="primary",
+                width="stretch",
+            )
+
+        if delete_submitted:
+            if not deleter_account.strip() or not deleter_password:
+                st.error("請輸入刪除人自己的工號與密碼。")
+            elif not delete_confirmed:
+                st.error("請先勾選刪除確認。")
+            else:
+                ok, message, deleter = UserService.authenticate(
+                    deleter_account,
+                    deleter_password,
+                )
+                if not ok:
+                    st.error(message)
+                else:
+                    deleter_name = (
+                        deleter.get("name")
+                        or deleter.get("account")
+                        or deleter_account
+                    )
+                    try:
+                        deleted_task = TaskService.delete_task(
+                            task_id,
+                            author=deleter_name,
+                        )
+                        result = notification_service.send_task_event(
+                            event="deleted",
+                            task=deleted_task,
+                            actor=deleter_name,
+                            channels=[
+                                channel.lower()
+                                for channel in delete_notify_channels
+                            ],
+                        )
+                        st.session_state["task_notification_result"] = result
+                        st.success(f"任務已刪除。操作人：{deleter_name}")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"任務刪除失敗：{exc}")
+
         history = task.get("history") or []
         if history:
             with st.expander("📜 活動紀錄"):

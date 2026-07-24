@@ -50,6 +50,7 @@ class NotificationService:
             "updated": "任務更新",
             "completed": "任務完成",
             "overdue": "任務逾期",
+            "deleted": "任務刪除",
         }
         event_title = event_titles.get(event, event)
         message = (
@@ -62,7 +63,7 @@ class NotificationService:
             results["teams"] = teams_service.send(
                 title=f"工程部平台｜{event_title}",
                 message=f"{title}（{progress}%）",
-                level="warning" if event == "overdue" else "info",
+                level="warning" if event in {"overdue", "deleted"} else "info",
                 facts={"部門": department, "指派人員": names, "截止日期": due, "操作人": actor},
                 source_url=get_settings().streamlit_base_url,
             )

@@ -641,6 +641,55 @@ class TaskService:
         return True
 
     @staticmethod
+    def update_task(task_id, changes, author=None):
+        records = TaskService.load_all()
+        target_id = parse_int(task_id, 0)
+        updated_task = None
+        for task in records:
+            if parse_int(task.get("id"), 0) != target_id:
+                continue
+            for field, value in changes.items():
+                if field in TaskService.COLUMNS and field not in {
+                    "id", "created_by", "created_account", "created_at"
+                }:
+                    task[field] = value
+            history = list(task.get("history") or [])
+            if author:
+                history.append(
+                    f"[{datetime.now().strftime('%m-%d %H:%M')}] {author} 修改任務"
+                )
+            task["history"] = history
+            task["updated_at"] = now_text()
+            updated_task = task
+            break
+        if updated_task is None:
+            raise ValueError("找不到要修改的任務。")
+        TaskService.save_all(records)
+        return dict(updated_task)
+
+    @staticmethod
+    def delete_task(task_id, author):
+        records = TaskService.load_all()
+        target_id = parse_int(task_id, 0)
+        deleted_task = None
+        for task in records:
+            if parse_int(task.get("id"), 0) != target_id:
+                continue
+            history = list(task.get("history") or [])
+            history.append(
+                f"[{datetime.now().strftime('%m-%d %H:%M')}] {author} 刪除任務"
+            )
+            task["history"] = history
+            task["status"] = "Deleted"
+            task["updated_at"] = now_text()
+            deleted_task = task
+            break
+        if deleted_task is None:
+            raise ValueError("找不到要刪除的任務。")
+        TaskService.save_all(records)
+        return dict(deleted_task)
+
+    @staticmethod
     def get_filtered_tasks(f_assignees, f_tags, tasks=None):
         if tasks is None:
             tasks = st.session_state.tasks

@@ -56,6 +56,15 @@ with st.expander("➕ 登記新會議", expanded=True):
             st.rerun()
 
     with st.form("add_mtg"):
+        auth_col1, auth_col2 = st.columns(2)
+        with auth_col1:
+            creator_account = st.text_input("建立人工號", key="meeting_creator_account")
+        with auth_col2:
+            creator_password = st.text_input(
+                "建立人密碼",
+                type="password",
+                key="meeting_creator_password",
+            )
         m_title = st.text_input("會議主題")
         m_time = st.date_input("開會日期", date.today())
         m_attendees = st.multiselect("與會者（可跨部門）", all_people, key="meeting_attendees")
@@ -68,33 +77,45 @@ with st.expander("➕ 登記新會議", expanded=True):
             help="Outlook 只寄給人員名單中已設定公司 Email 的與會者。",
         )
 
-        if st.form_submit_button("登記會議") and m_title:
-            try:
+        if st.form_submit_button("登記會議"):
+            if not creator_account.strip() or not creator_password:
+                st.error("請輸入建立人自己的工號與密碼。")
+            elif not m_title.strip():
+                st.error("請輸入會議主題。")
+            else:
+                ok, message, creator = UserService.authenticate(
+                    creator_account,
+                    creator_password,
+                )
+                if not ok:
+                    st.error(message)
+                    st.stop()
+                actor = creator.get("name") or creator.get("account") or creator_account
                 meeting = {
-                    "title": m_title,
+                    "title": m_title.strip(),
                     "time": m_time,
                     "attendees": m_attendees,
-                    "link": m_link,
-                    "notes": m_notes,
+                    "link": m_link.strip(),
+                    "notes": m_notes.strip(),
                     "department": current_department(),
                 }
-                actor = st.session_state.current_user
-                MeetingService.add_meeting(
-                    meeting,
-                    author=actor,
-                    account="",
-                )
-                result = notification_service.send_meeting_event(
-                    event="created",
-                    meeting=meeting,
-                    actor=actor,
-                    channels=[channel.lower() for channel in notify_channels],
-                )
-                st.session_state["meeting_notification_result"] = result
-                st.success("會議已成功建立並寫入 Google Sheet！")
-                st.rerun()
-            except Exception as e:
-                st.error(f"會議寫入失敗：{e}")
+                try:
+                    MeetingService.add_meeting(
+                        meeting,
+                        author=actor,
+                        account=creator.get("account", creator_account),
+                    )
+                    result = notification_service.send_meeting_event(
+                        event="created",
+                        meeting=meeting,
+                        actor=actor,
+                        channels=[channel.lower() for channel in notify_channels],
+                    )
+                    st.session_state["meeting_notification_result"] = result
+                    st.success(f"會議已成功建立！操作人：{actor}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"會議寫入失敗：{e}")
 
 st.divider()
 
@@ -125,6 +146,18 @@ for m in visible:
                 dict.fromkeys(list(m.get("attendees") or []) + all_people)
             )
             with st.form(f"edit_meeting_{meeting_id}"):
+                edit_auth1, edit_auth2 = st.columns(2)
+                with edit_auth1:
+                    editor_account = st.text_input(
+                        "修改人工號",
+                        key=f"meeting_editor_account_{meeting_id}",
+                    )
+                with edit_auth2:
+                    editor_password = st.text_input(
+                        "修改人密碼",
+                        type="password",
+                        key=f"meeting_editor_password_{meeting_id}",
+                    )
                 edited_title = st.text_input(
                     "會議主題",
                     value=str(m.get("title") or ""),
@@ -161,9 +194,19 @@ for m in visible:
                 update_submitted = st.form_submit_button("儲存會議變更")
 
             if update_submitted:
-                if not edited_title.strip():
+                if not editor_account.strip() or not editor_password:
+                    st.error("請輸入修改人自己的工號與密碼。")
+                elif not edited_title.strip():
                     st.error("會議主題不可空白。")
                 else:
+                    ok, message, editor = UserService.authenticate(
+                        editor_account,
+                        editor_password,
+                    )
+                    if not ok:
+                        st.error(message)
+                        st.stop()
+                    actor = editor.get("name") or editor.get("account") or editor_account
                     try:
                         updated_meeting = MeetingService.update_meeting(
                             meeting_id,
@@ -175,7 +218,6 @@ for m in visible:
                                 "notes": edited_notes.strip(),
                             },
                         )
-                        actor = st.session_state.current_user
                         result = notification_service.send_meeting_event(
                             event="updated",
                             meeting=updated_meeting,
@@ -186,7 +228,7 @@ for m in visible:
                             ],
                         )
                         st.session_state["meeting_notification_result"] = result
-                        st.success("會議已成功更新！")
+                        st.success(f"會議已成功更新！操作人：{actor}")
                         st.rerun()
                     except Exception as e:
                         st.error(f"會議更新失敗：{e}")
@@ -194,6 +236,18 @@ for m in visible:
         with cancel_tab:
             st.warning("取消後會從會議清單及 Google Sheet 移除，無法在平台復原。")
             with st.form(f"cancel_meeting_{meeting_id}"):
+                cancel_auth1, cancel_auth2 = st.columns(2)
+                with cancel_auth1:
+                    canceller_account = st.text_input(
+                        "刪除／取消人工號",
+                        key=f"meeting_canceller_account_{meeting_id}",
+                    )
+                with cancel_auth2:
+                    canceller_password = st.text_input(
+                        "刪除／取消人密碼",
+                        type="password",
+                        key=f"meeting_canceller_password_{meeting_id}",
+                    )
                 cancel_confirmed = st.checkbox(
                     f"我確認要取消「{m.get('title', '')}」",
                     key=f"cancel_confirmed_{meeting_id}",
@@ -211,14 +265,27 @@ for m in visible:
                 )
 
             if cancel_submitted:
-                if not cancel_confirmed:
+                if not canceller_account.strip() or not canceller_password:
+                    st.error("請輸入刪除／取消人自己的工號與密碼。")
+                elif not cancel_confirmed:
                     st.error("請先勾選取消確認。")
                 else:
+                    ok, message, canceller = UserService.authenticate(
+                        canceller_account,
+                        canceller_password,
+                    )
+                    if not ok:
+                        st.error(message)
+                        st.stop()
+                    actor = (
+                        canceller.get("name")
+                        or canceller.get("account")
+                        or canceller_account
+                    )
                     try:
                         cancelled_meeting = MeetingService.cancel_meeting(
                             meeting_id
                         )
-                        actor = st.session_state.current_user
                         result = notification_service.send_meeting_event(
                             event="cancelled",
                             meeting=cancelled_meeting,
@@ -229,7 +296,7 @@ for m in visible:
                             ],
                         )
                         st.session_state["meeting_notification_result"] = result
-                        st.success("會議已取消！")
+                        st.success(f"會議已取消！操作人：{actor}")
                         st.rerun()
                     except Exception as e:
                         st.error(f"會議取消失敗：{e}")
