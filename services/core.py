@@ -709,8 +709,12 @@ class MeetingService:
     @staticmethod
     def save_all(records):
         rows = [MeetingService._to_sheet(r) for r in records]
-        if not SheetDB.save(MeetingService.WORKSHEET_NAME, MeetingService.COLUMNS, rows):
+        ok = SheetDB.save(MeetingService.WORKSHEET_NAME, MeetingService.COLUMNS, rows)
+        if not ok:
             st.session_state.meetings_fallback = records
+            return False
+        st.session_state.meetings = records
+        return True
 
     @staticmethod
     def add_meeting(meeting, author=None, account=None):
@@ -734,6 +738,55 @@ class MeetingService:
         records.append(meeting)
         st.session_state.meetings = records
         return True
+
+    @staticmethod
+    def update_meeting(meeting_id, changes):
+        records = MeetingService.load_all()
+        target_id = parse_int(meeting_id, 0)
+        updated_meeting = None
+        for meeting in records:
+            if parse_int(meeting.get("id"), 0) != target_id:
+                continue
+            for field in ("title", "time", "attendees", "link", "notes"):
+                if field in changes:
+                    meeting[field] = changes[field]
+            meeting["updated_at"] = now_text()
+            updated_meeting = meeting
+            break
+
+        if updated_meeting is None:
+            raise ValueError("找不到要修改的會議。")
+        if not MeetingService.save_all(records):
+            raise RuntimeError(
+                st.session_state.get("sheet_db_error", "Google Sheet 會議更新失敗")
+            )
+        return dict(updated_meeting)
+
+    @staticmethod
+    def cancel_meeting(meeting_id):
+        records = MeetingService.load_all()
+        target_id = parse_int(meeting_id, 0)
+        cancelled_meeting = next(
+            (
+                meeting
+                for meeting in records
+                if parse_int(meeting.get("id"), 0) == target_id
+            ),
+            None,
+        )
+        if cancelled_meeting is None:
+            raise ValueError("找不到要取消的會議。")
+
+        remaining = [
+            meeting
+            for meeting in records
+            if parse_int(meeting.get("id"), 0) != target_id
+        ]
+        if not MeetingService.save_all(remaining):
+            raise RuntimeError(
+                st.session_state.get("sheet_db_error", "Google Sheet 會議取消失敗")
+            )
+        return dict(cancelled_meeting)
 
     @staticmethod
     def get_visible_meetings(target_date=None):

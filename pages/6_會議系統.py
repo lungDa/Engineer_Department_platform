@@ -116,3 +116,120 @@ for m in visible:
 
         if m.get('notes'):
             st.write(f"**紀要:** {m['notes']}")
+
+        meeting_id = int(m.get("id", 0))
+        edit_tab, cancel_tab = st.tabs(["✏️ 變更會議", "🚫 取消會議"])
+
+        with edit_tab:
+            attendee_options = list(
+                dict.fromkeys(list(m.get("attendees") or []) + all_people)
+            )
+            with st.form(f"edit_meeting_{meeting_id}"):
+                edited_title = st.text_input(
+                    "會議主題",
+                    value=str(m.get("title") or ""),
+                    key=f"edit_title_{meeting_id}",
+                )
+                edited_time = st.date_input(
+                    "開會日期",
+                    value=m.get("time") or date.today(),
+                    key=f"edit_time_{meeting_id}",
+                )
+                edited_attendees = st.multiselect(
+                    "與會者（可跨部門）",
+                    attendee_options,
+                    default=list(m.get("attendees") or []),
+                    key=f"edit_attendees_{meeting_id}",
+                )
+                edited_link = st.text_input(
+                    "連結",
+                    value=str(m.get("link") or ""),
+                    key=f"edit_link_{meeting_id}",
+                )
+                edited_notes = st.text_area(
+                    "紀要",
+                    value=str(m.get("notes") or ""),
+                    key=f"edit_notes_{meeting_id}",
+                )
+                edit_notify_channels = st.multiselect(
+                    "變更後通知管道",
+                    ["Teams", "Outlook"],
+                    default=["Teams", "Outlook"],
+                    key=f"edit_notify_channels_{meeting_id}",
+                    help="Outlook 只寄給更新後的與會者，且其人員資料須有公司 Email。",
+                )
+                update_submitted = st.form_submit_button("儲存會議變更")
+
+            if update_submitted:
+                if not edited_title.strip():
+                    st.error("會議主題不可空白。")
+                else:
+                    try:
+                        updated_meeting = MeetingService.update_meeting(
+                            meeting_id,
+                            {
+                                "title": edited_title.strip(),
+                                "time": edited_time,
+                                "attendees": edited_attendees,
+                                "link": edited_link.strip(),
+                                "notes": edited_notes.strip(),
+                            },
+                        )
+                        actor = st.session_state.current_user
+                        result = notification_service.send_meeting_event(
+                            event="updated",
+                            meeting=updated_meeting,
+                            actor=actor,
+                            channels=[
+                                channel.lower()
+                                for channel in edit_notify_channels
+                            ],
+                        )
+                        st.session_state["meeting_notification_result"] = result
+                        st.success("會議已成功更新！")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"會議更新失敗：{e}")
+
+        with cancel_tab:
+            st.warning("取消後會從會議清單及 Google Sheet 移除，無法在平台復原。")
+            with st.form(f"cancel_meeting_{meeting_id}"):
+                cancel_confirmed = st.checkbox(
+                    f"我確認要取消「{m.get('title', '')}」",
+                    key=f"cancel_confirmed_{meeting_id}",
+                )
+                cancel_notify_channels = st.multiselect(
+                    "取消後通知管道",
+                    ["Teams", "Outlook"],
+                    default=["Teams", "Outlook"],
+                    key=f"cancel_notify_channels_{meeting_id}",
+                    help="Outlook 會寄給取消前的與會者。",
+                )
+                cancel_submitted = st.form_submit_button(
+                    "確認取消會議",
+                    type="primary",
+                )
+
+            if cancel_submitted:
+                if not cancel_confirmed:
+                    st.error("請先勾選取消確認。")
+                else:
+                    try:
+                        cancelled_meeting = MeetingService.cancel_meeting(
+                            meeting_id
+                        )
+                        actor = st.session_state.current_user
+                        result = notification_service.send_meeting_event(
+                            event="cancelled",
+                            meeting=cancelled_meeting,
+                            actor=actor,
+                            channels=[
+                                channel.lower()
+                                for channel in cancel_notify_channels
+                            ],
+                        )
+                        st.session_state["meeting_notification_result"] = result
+                        st.success("會議已取消！")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"會議取消失敗：{e}")
