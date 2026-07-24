@@ -17,6 +17,7 @@ router = APIRouter(
 
 M365_SYNC_SOURCE = "m365"
 M365_SYNC_SCOPE = "工程一部"
+UNCLASSIFIED_DEPARTMENT = "待分類"
 
 
 class M365User(BaseModel):
@@ -151,7 +152,7 @@ def sync_m365_users(
     執行內容：
     - 更新既有人員的 M365 基本資料
     - 將 account 更新為 UPN／Email 的數字前綴
-    - 新增第一次出現的工程一部成員
+    - 新增第一次出現的工程一部成員至「待分類」
     - 將本次同步成員維持為啟用
 
     安全限制：
@@ -251,13 +252,14 @@ def sync_m365_users(
             marked += 1
             continue
 
-        # 新進人員尚無平台管理資料，因此建立安全預設值。
+        # 新進人員尚無平台管理資料，先放入「待分類」等待人工整理。
+        # 既有人員不會執行此區塊，因此原本課別維持不變。
         users.append(
             {
                 "id": next_id,
                 "account": account,
                 "password": UserService.DEFAULT_PASSWORD,
-                "department": M365_SYNC_SCOPE,
+                "department": UNCLASSIFIED_DEPARTMENT,
                 "job_title": m365_job_title or "助理工程師",
                 "role": "助理工程師",
                 "role_level": 0,
@@ -289,6 +291,7 @@ def sync_m365_users(
         "message": "Microsoft 365 工程一部手動安全同步完成。",
         "phase": "manual_safe_sync",
         "scope": M365_SYNC_SCOPE,
+        "new_user_department": UNCLASSIFIED_DEPARTMENT,
         "received": len(payload),
         "created": created,
         "updated": updated,
