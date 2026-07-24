@@ -5,7 +5,7 @@ from typing import Any
 
 import requests
 
-from config.settings import get_settings
+from config.settings import get_runtime_secret
 from services.base_service import BaseService
 from shared.response import failed, success
 
@@ -20,19 +20,33 @@ class LineService(BaseService):
     BROADCAST_ENDPOINT = "https://api.line.me/v2/bot/message/broadcast"
     DEFAULT_API_BASE_URL = "https://engineer-department-platform.onrender.com"
 
+    @staticmethod
+    def _runtime_secret(name: str, default: str = "") -> str:
+        """Read Streamlit Secrets/environment variables for every send."""
+        return get_runtime_secret(name, default).strip()
+
     def is_configured(self) -> bool:
-        settings = get_settings()
         return bool(
-            settings.line_channel_access_token
-            or (self._relay_url() and settings.m365_webhook_token)
+            self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN")
+            or (
+                self._relay_url()
+                and self._runtime_secret("M365_WEBHOOK_TOKEN")
+            )
         )
 
     def get_status(self) -> dict:
-        settings = get_settings()
+        direct_token = self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN")
+        relay_token = self._runtime_secret("M365_WEBHOOK_TOKEN")
         return {
             "configured": self.is_configured(),
-            "direct_token": bool(settings.line_channel_access_token),
-            "render_relay": bool(self._relay_url() and settings.m365_webhook_token),
+            "direct_token": bool(direct_token),
+            "render_relay": bool(self._relay_url() and relay_token),
+            "credential_diagnostics": {
+                "m365_webhook_token_loaded": bool(relay_token),
+                "api_base_url_loaded": bool(
+                    self._runtime_secret("API_BASE_URL")
+                ),
+            },
             "features": {
                 "webhook": True,
                 "signature_validation": True,
@@ -44,18 +58,21 @@ class LineService(BaseService):
         }
 
     def _headers(self) -> dict[str, str]:
-        token = get_settings().line_channel_access_token
+        token = self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN")
         return {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {token}",
         }
 
     def _relay_url(self) -> str:
-        base_url = get_settings().api_base_url.strip() or self.DEFAULT_API_BASE_URL
+        base_url = self._runtime_secret(
+            "API_BASE_URL",
+            self.DEFAULT_API_BASE_URL,
+        )
         return f"{base_url.rstrip('/')}/api/line-notifications/send"
 
     def validate_signature(self, body: bytes, signature: str | None) -> bool:
-        secret = get_settings().line_channel_secret
+        secret = self._runtime_secret("LINE_CHANNEL_SECRET")
         if not secret or not signature:
             return False
         digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).digest()
@@ -63,7 +80,7 @@ class LineService(BaseService):
         return hmac.compare_digest(expected, signature)
 
     def reply_text(self, reply_token: str, text: str) -> dict:
-        if not get_settings().line_channel_access_token:
+        if not self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN"):
             return failed("LINE 回覆需要在執行環境設定 Channel Access Token。")
         if not reply_token:
             return failed("缺少 LINE reply_token。")
@@ -77,7 +94,7 @@ class LineService(BaseService):
         )
 
     def push_text(self, user_id: str, text: str) -> dict:
-        if not get_settings().line_channel_access_token:
+        if not self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN"):
             return failed("LINE 個人推播需要在執行環境設定 Channel Access Token。")
         if not user_id:
             return failed("缺少 LINE user_id。")
@@ -125,11 +142,17 @@ class LineService(BaseService):
         return self._post_direct(self.BROADCAST_ENDPOINT, payload, "broadcast")
 
     def _broadcast_via_render(self, text: str) -> dict:
-        settings = get_settings()
-        relay_token = settings.m365_webhook_token.strip()
+        relay_token = self._runtime_secret("M365_WEBHOOK_TOKEN")
         if not relay_token:
             return failed(
-                "Streamlit 尚未設定 M365_WEBHOOK_TOKEN，無法呼叫 Render LINE 通知。"
+                "Streamlit 執行時未讀到 M365_WEBHOOK_TOKEN，"
+                "無法呼叫 Render LINE 通知。",
+                {
+                    "m365_webhook_token_loaded": False,
+                    "api_base_url_loaded": bool(
+                        self._runtime_secret("API_BASE_URL")
+                    ),
+                },
             )
 
         try:
@@ -160,7 +183,7 @@ class LineService(BaseService):
             return failed(f"Render LINE 通知連線失敗：{exc}")
 
     def broadcast_text(self, text: str) -> dict:
-        if get_settings().line_channel_access_token:
+        if self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN"):
             return self._broadcast_direct(text)
         return self._broadcast_via_render(text)
 

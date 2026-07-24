@@ -15,8 +15,8 @@ if load_dotenv:
     load_dotenv(BASE_DIR / ".env")
 
 
-def _get_secret(name: str, default: str = "") -> str:
-    """Read environment variables first, then common Streamlit layouts."""
+def get_runtime_secret(name: str, default: str = "") -> str:
+    """Read a secret at call time instead of relying on cached Settings."""
     env_value = os.getenv(name)
     if env_value is not None and str(env_value).strip():
         return str(env_value).strip()
@@ -45,6 +45,10 @@ def _get_secret(name: str, default: str = "") -> str:
         return default
     except Exception:
         return default
+
+
+# Backward-compatible alias for Settings field defaults.
+_get_secret = get_runtime_secret
 
 
 @dataclass(frozen=True)
