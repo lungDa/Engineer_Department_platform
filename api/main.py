@@ -6,6 +6,7 @@ from api.routers import (
     announcements,
     health,
     line,
+    line_test,
     m365_sync,
     meeting_reminders,
     notifications,
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router)
     app.include_router(announcements.router)
     app.include_router(line.router)
+    app.include_router(line_test.router)
     app.include_router(notifications.router)
     app.include_router(m365_sync.router)
     app.include_router(meeting_reminders.router)
