@@ -267,7 +267,6 @@ if management_unlocked:
                         st.error(f"同步啟動失敗：{exc}")
                     else:
                         st.session_state["m365_sync_run"] = run
-                        st.session_state["confirm_m365_sync"] = False
                         st.success("同步工作已成功送出，GitHub Actions 正在執行。")
 
             latest_run = st.session_state.get("m365_sync_run")
