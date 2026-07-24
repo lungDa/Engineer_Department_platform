@@ -177,10 +177,29 @@ class UserService:
     WORKSHEET_NAME = "Users"
     DEFAULT_PASSWORD = "0000"
     COLUMNS = [
-        "id", "name", "account", "password", "role", "role_level", "active",
-        "department", "assignments", "email", "line_user_id", "must_change_password",
-        "created_at", "updated_at", "last_login_at",
-    ]
+    "id",
+    "name",
+    "account",
+    "password",
+    "role",
+    "role_level",
+    "active",
+    "department",
+    "assignments",
+    "email",
+    "line_user_id",
+    "must_change_password",
+    "created_at",
+    "updated_at",
+    "last_login_at",
+    "m365_upn",
+    "m365_department",
+    "job_title",
+    "mobile",
+    "m365_id",
+    "sync_source",
+    "m365_scope",
+]
 
     @staticmethod
     def default_users():
