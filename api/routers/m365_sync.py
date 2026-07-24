@@ -1,237 +1,254 @@
-import os
-import sys
-import requests
+import hmac
+from datetime import datetime
+
+from fastapi import APIRouter, Header, HTTPException, status
+from pydantic import BaseModel, ConfigDict, Field
+
+from config.settings import get_settings
+from repositories.user_repository import user_repository
+from services.core import UserService, parse_int
 
 
-TENANT_ID = os.environ["M365_TENANT_ID"].strip()
-CLIENT_ID = os.environ["M365_CLIENT_ID"].strip()
-CLIENT_SECRET = os.environ["M365_CLIENT_SECRET"].strip()
-WEBHOOK_TOKEN = os.environ["M365_WEBHOOK_TOKEN"].strip()
-GROUP_ID = os.environ["M365_GROUP_ID"].strip()
-
-PLATFORM_DEPARTMENT = "工程一部"
-
-SYNC_API_URL = (
-    "https://engineer-department-platform.onrender.com"
-    "/api/m365/users/sync"
+router = APIRouter(
+    prefix="/api/m365",
+    tags=["Microsoft 365 Directory"],
 )
 
+M365_SYNC_SOURCE = "m365"
+M365_SYNC_SCOPE = "工程一部"
 
-def get_graph_access_token():
-    url = (
-        f"https://login.microsoftonline.com/"
-        f"{TENANT_ID}/oauth2/v2.0/token"
+
+class M365User(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    # Microsoft 365 未填寫的欄位可能會回傳 null。
+    name: str | None = Field(default="", max_length=200)
+    email: str | None = Field(default="", max_length=320)
+    upn: str | None = Field(default="", max_length=320)
+    department: str | None = Field(default="", max_length=200)
+    job_title: str | None = Field(default="", max_length=200)
+    mobile: str | None = Field(default="", max_length=100)
+    m365_id: str | None = Field(default="", max_length=200)
+
+
+def _normalized(value: object) -> str:
+    """統一比較格式，避免大小寫及前後空白造成重複人員。"""
+    return str(value or "").strip().casefold()
+
+
+def _verify_token(
+    received_token: str | None,
+    authorization: str | None,
+) -> None:
+    """驗證 GitHub Actions 傳入的同步權杖。"""
+    expected = get_settings().m365_webhook_token.strip()
+
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Render 尚未設定 M365_WEBHOOK_TOKEN。",
+        )
+
+    supplied = str(received_token or "").strip()
+
+    if not supplied and authorization:
+        scheme, _, credentials = authorization.partition(" ")
+
+        if scheme.casefold() == "bearer":
+            supplied = credentials.strip()
+
+    if not supplied or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="M365 同步 Token 無效。",
+        )
+
+
+def _find_existing_index(
+    users: list[dict],
+    incoming: M365User,
+) -> int | None:
+    """依序使用穩定識別資料尋找平台既有人員。"""
+    candidates = (
+        ("m365_id", incoming.m365_id),
+        ("m365_upn", incoming.upn),
+        ("email", incoming.email or incoming.upn),
+        ("account", incoming.upn or incoming.email),
     )
 
-    response = requests.post(
-        url,
-        data={
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-            "scope": "https://graph.microsoft.com/.default",
-            "grant_type": "client_credentials",
-        },
-        timeout=30,
+    for field, value in candidates:
+        needle = _normalized(value)
+
+        if not needle:
+            continue
+
+        for index, user in enumerate(users):
+            if _normalized(user.get(field)) == needle:
+                return index
+
+    # 只有平台內同名人員剛好一位時，才允許用姓名比對。
+    name = _normalized(incoming.name)
+
+    if not name:
+        return None
+
+    matches = [
+        index
+        for index, user in enumerate(users)
+        if _normalized(user.get("name")) == name
+    ]
+
+    return matches[0] if len(matches) == 1 else None
+
+
+@router.post("/users/sync")
+def sync_m365_users(
+    payload: list[M365User],
+    x_m365_webhook_token: str | None = Header(
+        default=None,
+        alias="X-M365-Webhook-Token",
+    ),
+    authorization: str | None = Header(default=None),
+):
+    """
+    將 Microsoft 365 工程一部群組成員新增或更新至 Users 工作表。
+
+    第一階段只進行新增、更新及來源標記：
+    - 不停用任何人
+    - 不刪除任何人
+    - 保留平台密碼、權限、兼任資料及 LINE ID
+    """
+    _verify_token(
+        x_m365_webhook_token,
+        authorization,
     )
 
-    if not response.ok:
-        try:
-            error_data = response.json()
-        except ValueError:
-            error_data = {}
-
-        error_code = error_data.get("error", "unknown_error")
-        error_description = error_data.get(
-            "error_description",
-            "Microsoft 未提供詳細錯誤內容",
-        )
-        trace_id = error_data.get("trace_id", "")
-        correlation_id = error_data.get("correlation_id", "")
-        timestamp = error_data.get("timestamp", "")
-
-        raise RuntimeError(
-            "\nMicrosoft 登入權杖取得失敗"
-            f"\nHTTP 狀態：{response.status_code}"
-            f"\n錯誤類型：{error_code}"
-            f"\n錯誤說明：{error_description}"
-            f"\nTrace ID：{trace_id}"
-            f"\nCorrelation ID：{correlation_id}"
-            f"\n時間：{timestamp}"
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="人員清單不可為空。",
         )
 
-    token_data = response.json()
-    access_token = token_data.get("access_token")
-
-    if not access_token:
-        raise RuntimeError(
-            "Microsoft 回應成功，但沒有取得 access_token"
+    if len(payload) > 1000:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="單次最多同步1000位人員。",
         )
 
-    return access_token
+    users = user_repository.get_all()
 
-
-def get_m365_group_users(access_token):
-    url = (
-        "https://graph.microsoft.com/v1.0/"
-        f"groups/{GROUP_ID}/transitiveMembers/"
-        "microsoft.graph.user"
-        "?$select=id,displayName,mail,userPrincipalName,"
-        "jobTitle,mobilePhone,accountEnabled,userType"
-        "&$top=999"
+    next_id = (
+        max(
+            (
+                parse_int(user.get("id"), 0)
+                for user in users
+            ),
+            default=0,
+        )
+        + 1
     )
 
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Accept": "application/json",
-    }
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    users = []
+    created = 0
+    updated = 0
+    skipped = 0
+    marked = 0
 
-    while url:
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=60,
-        )
+    for incoming in payload:
+        email = str(
+            incoming.email
+            or incoming.upn
+            or ""
+        ).strip()
 
-        if not response.ok:
-            try:
-                error_data = response.json()
-                graph_error = error_data.get("error", {})
-            except ValueError:
-                graph_error = {}
+        upn = str(incoming.upn or "").strip()
+        name = str(incoming.name or "").strip()
+        m365_id = str(incoming.m365_id or "").strip()
 
-            raise RuntimeError(
-                "\nMicrosoft Graph 群組成員取得失敗"
-                f"\n群組 ID：{GROUP_ID}"
-                f"\nHTTP 狀態：{response.status_code}"
-                f"\n錯誤代碼："
-                f"{graph_error.get('code', 'unknown_error')}"
-                f"\n錯誤說明："
-                f"{graph_error.get('message', '無詳細說明')}"
-            )
-
-        data = response.json()
-        users.extend(data.get("value", []))
-        url = data.get("@odata.nextLink")
-
-    return users
-
-
-def transform_users(users):
-    result = []
-
-    for user in users:
-        # 排除停用帳號
-        if user.get("accountEnabled") is False:
+        # 姓名與任一帳號識別資料不可同時缺少。
+        if not name or not (email or upn or m365_id):
+            skipped += 1
             continue
 
-        # 排除外部來賓
-        if user.get("userType") == "Guest":
+        index = _find_existing_index(users, incoming)
+
+        m365_fields = {
+            "name": name,
+            "email": email,
+            "m365_upn": upn,
+            "m365_department": str(
+                incoming.department or ""
+            ).strip(),
+            "department": (
+                str(incoming.department or "").strip()
+                or M365_SYNC_SCOPE
+            ),
+            "job_title": str(
+                incoming.job_title or ""
+            ).strip(),
+            "mobile": str(
+                incoming.mobile or ""
+            ).strip(),
+            "m365_id": m365_id,
+            "sync_source": M365_SYNC_SOURCE,
+            "m365_scope": M365_SYNC_SCOPE,
+            "updated_at": now,
+        }
+
+        if index is not None:
+            # 僅更新 Microsoft 365 管理的欄位。
+            # 不覆蓋密碼、角色、權限、兼任及 LINE ID。
+            users[index].update(m365_fields)
+
+            # 工程一部目前仍在群組內的人員恢復啟用。
+            users[index]["active"] = "TRUE"
+
+            updated += 1
+            marked += 1
             continue
 
-        name = (user.get("displayName") or "").strip()
-        upn = (user.get("userPrincipalName") or "").strip()
-        email = (user.get("mail") or upn).strip()
-
-        if not name or not email:
-            continue
-
-        result.append(
+        users.append(
             {
-                "name": name,
-                "email": email,
-                "upn": upn,
-                "department": PLATFORM_DEPARTMENT,
-                "job_title": (
-                    user.get("jobTitle") or ""
-                ).strip(),
-                "mobile": (
-                    user.get("mobilePhone") or ""
-                ).strip(),
-                "m365_id": user.get("id") or "",
+                "id": next_id,
+                "account": upn or email,
+                "password": UserService.DEFAULT_PASSWORD,
+                "role": "助理工程師",
+                "role_level": 0,
+                "active": "TRUE",
+                "assignments": "[]",
+                "line_user_id": "",
+                "must_change_password": "TRUE",
+                "created_at": now,
+                "last_login_at": "",
+                **m365_fields,
             }
         )
 
-    return result
+        next_id += 1
+        created += 1
+        marked += 1
 
-
-def sync_to_platform(users):
-    response = requests.post(
-        SYNC_API_URL,
-        headers={
-            "X-M365-Webhook-Token": WEBHOOK_TOKEN,
-            "Content-Type": "application/json",
-        },
-        json=users,
-        timeout=120,
-    )
-
-    if not response.ok:
-        try:
-            error_data = response.json()
-        except ValueError:
-            error_data = {
-                "detail": response.text[:500]
-            }
-
-        raise RuntimeError(
-            "\n平台人員同步失敗"
-            f"\nHTTP 狀態：{response.status_code}"
-            f"\n平台回應：{error_data}"
+    if not user_repository.save_all(users):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=(
+                "M365 人員已接收，"
+                "但寫入 Google Sheet Users 失敗。"
+            ),
         )
 
-    return response.json()
-
-
-def main():
-    if not GROUP_ID:
-        raise RuntimeError(
-            "M365_GROUP_ID 未設定或內容為空白"
-        )
-
-    print("開始取得 Microsoft 365 登入權杖……")
-    access_token = get_graph_access_token()
-    print("Microsoft 365 登入權杖取得成功")
-
-    print("開始讀取工程一部群組成員……")
-    print(f"Microsoft 365 群組 ID：{GROUP_ID}")
-
-    graph_users = get_m365_group_users(access_token)
-    platform_users = transform_users(graph_users)
-
-    if not platform_users:
-        raise RuntimeError(
-            "Microsoft Graph 未取得可同步的工程一部人員"
-        )
-
-    print("開始同步工程一部人員至開發工程部平台……")
-    result = sync_to_platform(platform_users)
-
-    print(f"群組取得成員：{len(graph_users)} 人")
-    print(f"符合同步條件：{len(platform_users)} 人")
-    print(f"平台部門設定：{PLATFORM_DEPARTMENT}")
-    print(f"平台同步結果：{result}")
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except requests.Timeout:
-        print(
-            "M365 人員同步失敗：連線逾時，請稍後再試",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    except requests.RequestException as error:
-        print(
-            f"M365 人員同步失敗：網路請求錯誤：{error}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    except Exception as error:
-        print(
-            f"M365 人員同步失敗：{error}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    return {
+        "ok": True,
+        "message": "M365 工程一部人員同步及來源標記完成。",
+        "phase": "mark_only",
+        "scope": M365_SYNC_SCOPE,
+        "received": len(payload),
+        "created": created,
+        "updated": updated,
+        "marked": marked,
+        "skipped": skipped,
+        "disabled": 0,
+        "deleted": 0,
+        "total_users": len(users),
+    }
