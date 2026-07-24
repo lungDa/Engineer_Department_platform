@@ -28,5 +28,5 @@ jobs:
             --request POST \
             --header "Content-Type: application/json" \
             --header "X-M365-Webhook-Token: ${M365_WEBHOOK_TOKEN}" \
-            --data '{"days_before":1,"channels":["teams","outlook"]}' \
+            --data '{"days_before":1,"channels":["teams","outlook","line"]}' \
             "https://engineer-department-platform.onrender.com/api/meetings/reminders/run"
