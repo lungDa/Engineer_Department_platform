@@ -15,10 +15,19 @@ class TeamsService(BaseService):
     def is_configured(self) -> bool:
         return bool(get_settings().teams_webhook_url.strip())
 
+    def is_bulletin_configured(self) -> bool:
+        """Return whether the bulletin-only Teams webhook is configured."""
+        return bool(get_settings().bulletin_webhook_url.strip())
+
     def get_status(self) -> dict:
         return {
             "configured": self.is_configured(),
-            "features": {"channel_notification": True, "power_automate": True},
+            "bulletin_configured": self.is_bulletin_configured(),
+            "features": {
+                "channel_notification": True,
+                "bulletin_channel_notification": True,
+                "power_automate": True,
+            },
         }
 
     def send(
@@ -32,8 +41,57 @@ class TeamsService(BaseService):
         settings = get_settings()
         if not self.is_configured():
             return failed("Teams Power Automate Webhook 尚未設定。")
+
+        return self._send_to_webhook(
+            webhook_url=settings.teams_webhook_url,
+            title=title,
+            message=message,
+            level=level,
+            facts=facts,
+            source_url=source_url,
+            success_message="Teams 通知已送出。",
+            failure_label="Teams 通知",
+        )
+
+    def send_bulletin(
+        self,
+        title: str,
+        message: str,
+        level: str = "info",
+        facts: dict[str, Any] | None = None,
+        source_url: str = "",
+    ) -> dict:
+        """Send a bulletin only to the dedicated Teams bulletin channel."""
+        settings = get_settings()
+        if not self.is_bulletin_configured():
+            return failed("Teams 布告欄專用 Webhook 尚未設定。")
+
+        return self._send_to_webhook(
+            webhook_url=settings.bulletin_webhook_url,
+            title=title,
+            message=message,
+            level=level,
+            facts=facts,
+            source_url=source_url,
+            success_message="Teams 布告欄通知已送出。",
+            failure_label="Teams 布告欄通知",
+        )
+
+    def _send_to_webhook(
+        self,
+        *,
+        webhook_url: str,
+        title: str,
+        message: str,
+        level: str,
+        facts: dict[str, Any] | None,
+        source_url: str,
+        success_message: str,
+        failure_label: str,
+    ) -> dict:
+        settings = get_settings()
         if not title or not message:
-            return failed("Teams 通知缺少標題或內容。")
+            return failed(f"{failure_label}缺少標題或內容。")
 
         fact_rows = [
             {"title": str(key)[:100], "value": str(value)[:500]}
@@ -103,15 +161,15 @@ class TeamsService(BaseService):
 
         try:
             response = requests.post(
-                settings.teams_webhook_url,
+                webhook_url,
                 headers=headers,
                 json=payload,
                 timeout=15,
             )
             if response.status_code >= 400:
-                self.logger.error("Teams webhook failed: HTTP %s", response.status_code)
+                self.logger.error("%s webhook failed: HTTP %s", failure_label, response.status_code)
                 return failed(
-                    f"Teams 通知失敗：HTTP {response.status_code}",
+                    f"{failure_label}失敗：HTTP {response.status_code}",
                     {
                         "status_code": response.status_code,
                         "response": response.text[:500],
@@ -122,11 +180,11 @@ class TeamsService(BaseService):
                     "status_code": response.status_code,
                     "response": response.text[:500],
                 },
-                "Teams 通知已送出。",
+                success_message,
             )
         except requests.RequestException as exc:
-            self.logger.exception("Teams webhook exception.")
-            return failed(f"Teams 通知連線失敗：{exc.__class__.__name__}")
+            self.logger.exception("%s webhook exception.", failure_label)
+            return failed(f"{failure_label}連線失敗：{exc.__class__.__name__}")
 
 
 teams_service = TeamsService()
