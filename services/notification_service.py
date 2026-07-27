@@ -188,5 +188,162 @@ class NotificationService:
             "通知已處理。" if not failed_channels else "部分通知發送失敗。",
         )
 
+    def send_leave_event(
+        self,
+        *,
+        event: str,
+        approval: dict,
+        actor: str,
+        channels: Iterable[str] = ("teams", "outlook", "line"),
+    ) -> dict:
+        """Notify the selected people after a leave request is saved."""
+        enabled = {str(channel).strip().lower() for channel in channels}
+        notified_users = approval.get("notified_users") or []
+        if isinstance(notified_users, str):
+            notified_users = [
+                item.strip()
+                for item in notified_users.replace("；", ",").replace("、", ",").split(",")
+                if item.strip()
+            ]
+
+        contacts = self._contacts(notified_users)
+        names = "、".join(notified_users) or "未指定"
+        leave_type = str(approval.get("leave_type") or "請假")
+        start_date = str(approval.get("start_date") or "-")
+        end_date = str(approval.get("end_date") or start_date)
+        start_time = str(approval.get("start_time") or "08:30")
+        end_time = str(approval.get("end_time") or "17:30")
+        leave_hours = str(approval.get("leave_hours") or "0")
+        content = str(approval.get("content") or "").strip() or "無"
+        event_titles = {
+            "created": "新增請假申請",
+            "updated": "請假申請變更",
+            "deleted": "請假申請刪除",
+        }
+        event_title = event_titles.get(event, event)
+        message = (
+            f"事件：{event_title}\n申請人：{actor}\n假別：{leave_type}\n"
+            f"日期：{start_date} ～ {end_date}\n"
+            f"時段：{start_time} ～ {end_time}（{leave_hours} 小時）\n"
+            f"被通知者：{names}\n請假說明：{content}"
+        )
+        results: dict[str, dict] = {}
+
+        if "teams" in enabled:
+            results["teams"] = teams_service.send(
+                title=f"工程部平台｜{event_title}",
+                message=f"{actor}｜{leave_type}",
+                level="warning" if event == "deleted" else "info",
+                facts={
+                    "申請人": actor,
+                    "假別": leave_type,
+                    "日期": f"{start_date} ～ {end_date}",
+                    "時段": f"{start_time} ～ {end_time}（{leave_hours} 小時）",
+                    "被通知者": names,
+                    "請假說明": content,
+                },
+                source_url=get_settings().streamlit_base_url,
+            )
+        else:
+            results["teams"] = self._skipped("未選擇 Teams。")
+
+        if "outlook" in enabled:
+            emails = [
+                str(user.get("email") or user.get("m365_upn") or "").strip()
+                for user in contacts
+                if str(user.get("email") or user.get("m365_upn") or "").strip()
+            ]
+            missing_names = [
+                name for name in notified_users
+                if not any(
+                    str(user.get("name", "")).strip() == name
+                    and str(user.get("email") or user.get("m365_upn") or "").strip()
+                    for user in contacts
+                )
+            ]
+            if emails:
+                results["outlook"] = mail_service.send(
+                    emails,
+                    f"[工程部平台] {event_title}｜{actor}｜{leave_type}",
+                    message,
+                )
+                if missing_names:
+                    results["outlook"]["message"] = (
+                        f"{results['outlook'].get('message', '')}"
+                        f" 未寄送：{'、'.join(missing_names)}（人員名單未設定 Email）。"
+                    ).strip()
+                    results["outlook"]["missing_recipients"] = missing_names
+            else:
+                results["outlook"] = self._skipped(
+                    f"被通知者尚未設定 Email：{names}"
+                )
+        else:
+            results["outlook"] = self._skipped("未選擇 Outlook。")
+
+        if "line" in enabled:
+            line_targets = [
+                (
+                    str(user.get("name", "")).strip(),
+                    str(user.get("line_user_id", "")).strip(),
+                )
+                for user in contacts
+                if str(user.get("line_user_id", "")).strip()
+            ]
+            missing_line_names = [
+                name for name in notified_users
+                if not any(
+                    str(user.get("name", "")).strip() == name
+                    and str(user.get("line_user_id", "")).strip()
+                    for user in contacts
+                )
+            ]
+            if line_targets:
+                deliveries = [
+                    {
+                        "name": name,
+                        "result": line_service.push_text(line_user_id, message),
+                    }
+                    for name, line_user_id in line_targets
+                ]
+                failed_names = [
+                    item["name"] for item in deliveries
+                    if not item["result"].get("ok")
+                ]
+                if failed_names:
+                    results["line"] = {
+                        "ok": False,
+                        "message": f"LINE 個人推播失敗：{'、'.join(failed_names)}",
+                        "data": {"deliveries": deliveries},
+                    }
+                else:
+                    notice = f"LINE 已個別通知：{'、'.join(name for name, _ in line_targets)}"
+                    if missing_line_names:
+                        notice += (
+                            f"；未通知：{'、'.join(missing_line_names)}"
+                            "（人員名單未設定 LINE User ID）"
+                        )
+                    results["line"] = {
+                        "ok": True,
+                        "message": notice,
+                        "data": {
+                            "deliveries": deliveries,
+                            "missing_recipients": missing_line_names,
+                        },
+                    }
+            else:
+                results["line"] = self._skipped(
+                    f"被通知者尚未設定 LINE User ID：{names}"
+                )
+        else:
+            results["line"] = self._skipped("未選擇 LINE。")
+
+        failed_channels = [
+            name for name, result in results.items() if not result.get("ok")
+        ]
+        return success(
+            {"channels": results, "failed_channels": failed_channels},
+            "通知已處理。" if not failed_channels else "部分通知發送失敗。",
+        )
+
 
 notification_service = NotificationService()

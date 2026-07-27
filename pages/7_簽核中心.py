@@ -3,12 +3,33 @@ from datetime import date, datetime
 import streamlit as st
 
 from utils import AppInitializer, ApprovalService, UserService
+from services.notification_service import notification_service
 
 
 AppInitializer.setup(load_tasks=False, load_approvals=True)
 
 st.header("✍️ 簽核中心")
 st.caption("第一階段：請假申請。送出成功後立即寫入 Google Sheet 並顯示於專案行事曆。")
+
+
+def show_notification_result(result):
+    channels = (result.get("data") or {}).get("channels", {})
+    labels = {"teams": "Teams", "outlook": "Outlook", "line": "LINE"}
+    for channel, channel_result in channels.items():
+        label = labels.get(channel, channel)
+        message = channel_result.get("message", "")
+        if channel_result.get("skipped"):
+            st.info(f"{label}：略過（{message}）")
+        elif channel_result.get("ok"):
+            st.success(f"{label}：成功（{message}）" if message else f"{label}：成功")
+        else:
+            st.warning(f"{label}：失敗（{message}）")
+
+
+pending_notification = st.session_state.pop("leave_notification_result", None)
+if pending_notification:
+    st.markdown("##### 🔔 上次請假通知結果")
+    show_notification_result(pending_notification)
 
 all_people = UserService.get_all_partner_names()
 leave_time_options = [
@@ -106,6 +127,13 @@ with st.expander("📝 提出請假申請", expanded=True):
                             author=user.get("name", ""),
                             account=user.get("account", account),
                         )
+                        result = notification_service.send_leave_event(
+                            event="created",
+                            approval=new_app,
+                            actor=user.get("name", ""),
+                            channels=("teams", "outlook", "line"),
+                        )
+                        st.session_state["leave_notification_result"] = result
                         st.success("請假申請已送出，並立即寫入專案行事曆與 Google Sheet。")
                         st.rerun()
                     except Exception as exc:
