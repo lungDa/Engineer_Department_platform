@@ -220,8 +220,10 @@ class UserService:
     @staticmethod
     def save_all(records):
         records = SheetDB.normalize_records(records, UserService.COLUMNS)
-        if not SheetDB.save(UserService.WORKSHEET_NAME, UserService.COLUMNS, records):
+        saved = bool(SheetDB.save(UserService.WORKSHEET_NAME, UserService.COLUMNS, records))
+        if not saved:
             st.session_state.user_records_fallback = records
+        return saved
 
     @staticmethod
     def get_active_users():
@@ -408,6 +410,49 @@ class UserService:
                 row["updated_at"] = now
         UserService.save_all(records)
         return True, "登入成功。", user
+
+    @staticmethod
+    def bind_line_user(account: str, password: str, line_user_id: str):
+        """驗證員工身分後，將 LINE webhook User ID 綁定至 Users。
+
+        綁定只允許啟用中的帳號，且同一個 LINE User ID 不可綁給不同工號。
+        """
+        account_key = str(account or "").strip().lower()
+        line_id = str(line_user_id or "").strip()
+        if not account_key or not str(password or ""):
+            return False, "請輸入工號與密碼。", None
+        if not line_id.startswith("U") or len(line_id) < 10:
+            return False, "無法取得有效的 LINE User ID，請重新加入官方帳號後再試。", None
+
+        records = UserService.load_all()
+        target = next(
+            (
+                row for row in records
+                if str(row.get("account", "")).strip().lower() == account_key
+            ),
+            None,
+        )
+        if not target or bool_text(target.get("active", "TRUE")) != "TRUE":
+            return False, "工號不存在或帳號已停用。", None
+        if str(target.get("password", "")) != str(password):
+            return False, "工號或密碼錯誤。", None
+
+        duplicate = next(
+            (
+                row for row in records
+                if str(row.get("line_user_id", "")).strip() == line_id
+                and str(row.get("account", "")).strip().lower() != account_key
+            ),
+            None,
+        )
+        if duplicate:
+            return False, "此 LINE 帳號已綁定其他工號，請聯絡平台管理者。", None
+
+        target["line_user_id"] = line_id
+        target["updated_at"] = now_text()
+        if not UserService.save_all(records):
+            return False, "綁定資料寫入失敗，請確認 Render 的 Google Sheet 連線設定。", None
+        return True, "LINE 帳號綁定成功。", target
 
     @staticmethod
     def change_password(account, old_password, new_password, confirm_password, require_old=True):

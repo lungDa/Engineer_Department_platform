@@ -1,4 +1,5 @@
 from line_handlers.announcement_commands import announcements_text
+from line_handlers.binding_commands import bind_line_account
 from line_handlers.system_commands import help_text, status_text
 from line_handlers.task_commands import my_tasks_text
 
@@ -10,6 +11,10 @@ class LineCommandRouter:
         return str(text or "").strip().lower().replace(" ", "")
 
     def route(self, text: str, user_id: str | None = None) -> str:
+        binding_reply = bind_line_account(text=text, user_id=user_id)
+        if binding_reply is not None:
+            return binding_reply
+
         command = self.normalize(text)
 
         if command in {"", "help", "說明", "幫助", "指令"}:

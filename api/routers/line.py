@@ -77,8 +77,7 @@ async def line_webhook(
 
         replies.append(
             {
-                "user_id": event.get("user_id"),
-                "text": event.get("text"),
+                "user_id_suffix": str(event.get("user_id") or "")[-4:],
                 "reply_ok": result.get("ok"),
             }
         )
