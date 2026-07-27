@@ -848,24 +848,39 @@ class MeetingService:
 
 class ApprovalService:
     WORKSHEET_NAME = "Approvals"
-    COLUMNS = ["id", "department", "type", "content", "sender", "sender_account", "current_signer", "status", "history", "created_at", "updated_at"]
+    COLUMNS = [
+        # 保留舊欄位順序，讓既有 Google Sheet 只需在表尾自動補欄，
+        # 避免第一次升級時 append_row 寫入錯誤欄位。
+        "id", "department", "type", "content", "sender", "sender_account",
+        "current_signer", "status", "history", "created_at", "updated_at",
+        "leave_type", "start_date", "end_date", "notified_users",
+        "start_time", "end_time", "leave_hours",
+    ]
 
     @staticmethod
     def default_approvals():
         now = now_text()
-        return [{"id": 1, "type": "請假單", "content": "範例簽呈，可刪除", "sender": "闕老師", "sender_account": "admin", "current_signer": "闕老師", "status": "簽核中", "history": ["[系統] 範例資料"], "created_at": now, "updated_at": now}]
+        return []
 
     @staticmethod
     def _from_sheet(row):
         row = {col: row.get(col, "") for col in ApprovalService.COLUMNS}
         row["id"] = parse_int(row.get("id"), 0)
         row["history"] = parse_json_list(row.get("history"))
+        row["notified_users"] = parse_json_list(row.get("notified_users"))
+        row["start_date"] = parse_date(row.get("start_date"), None)
+        row["end_date"] = parse_date(row.get("end_date"), row.get("start_date"))
+        row["leave_hours"] = parse_float(row.get("leave_hours"), 0.0)
         return row
 
     @staticmethod
     def _to_sheet(row):
         row = dict(row)
         row["history"] = json.dumps(row.get("history", []), ensure_ascii=False)
+        row["notified_users"] = json.dumps(row.get("notified_users", []), ensure_ascii=False)
+        for field in ("start_date", "end_date"):
+            value = row.get(field)
+            row[field] = value.strftime("%Y-%m-%d") if isinstance(value, date) else value
         row["updated_at"] = row.get("updated_at") or now_text()
         return {col: row.get(col, "") for col in ApprovalService.COLUMNS}
 
@@ -884,6 +899,9 @@ class ApprovalService:
         rows = [ApprovalService._to_sheet(r) for r in records]
         if not SheetDB.save(ApprovalService.WORKSHEET_NAME, ApprovalService.COLUMNS, rows):
             st.session_state.approvals_fallback = records
+            return False
+        st.session_state.approvals = records
+        return True
 
     @staticmethod
     def add_approval(approval, author=None, account=None):
@@ -907,6 +925,73 @@ class ApprovalService:
         records.append(approval)
         st.session_state.approvals = records
         return True
+
+    @staticmethod
+    def is_completed_leave(approval, today=None):
+        """結束日期早於今天即為已休完；開發者也不得略過此規則。"""
+        if str(approval.get("type", "")).strip() != "請假單":
+            return False
+        end_date = parse_date(approval.get("end_date"), None)
+        return bool(end_date and end_date < (today or date.today()))
+
+    @staticmethod
+    def update_approval(approval_id, changes, operator_account):
+        records = ApprovalService.load_all()
+        target_id = parse_int(approval_id, 0)
+        target = next(
+            (row for row in records if parse_int(row.get("id"), 0) == target_id),
+            None,
+        )
+        if target is None:
+            raise ValueError("找不到要修改的假單。")
+        if str(target.get("sender_account", "")).strip().lower() != str(operator_account).strip().lower():
+            raise PermissionError("只能修改自己送出的假單。")
+
+        start_date = parse_date(changes.get("start_date", target.get("start_date")), None)
+        end_date = parse_date(changes.get("end_date", target.get("end_date")), start_date)
+        if not start_date or not end_date:
+            raise ValueError("請假日期不可空白。")
+        if end_date < start_date:
+            raise ValueError("結束日期不可早於開始日期。")
+
+        for field in (
+            "leave_type", "content", "notified_users",
+            "start_time", "end_time", "leave_hours",
+        ):
+            if field in changes:
+                target[field] = changes[field]
+        target["start_date"] = start_date
+        target["end_date"] = end_date
+        target["updated_at"] = now_text()
+        target.setdefault("history", []).append(
+            f"[{datetime.now().strftime('%m-%d %H:%M')}] {target.get('sender', '')} 修改假單"
+        )
+        if not ApprovalService.save_all(records):
+            raise RuntimeError(st.session_state.get("sheet_db_error", "Google Sheet 假單更新失敗"))
+        return dict(target)
+
+    @staticmethod
+    def delete_approval(approval_id, operator_account):
+        records = ApprovalService.load_all()
+        target_id = parse_int(approval_id, 0)
+        target = next(
+            (row for row in records if parse_int(row.get("id"), 0) == target_id),
+            None,
+        )
+        if target is None:
+            raise ValueError("找不到要刪除的假單。")
+        if str(target.get("sender_account", "")).strip().lower() != str(operator_account).strip().lower():
+            raise PermissionError("只能刪除自己送出的假單。")
+        if ApprovalService.is_completed_leave(target):
+            raise PermissionError("已休完的假不能刪除，開發者也不例外。")
+
+        remaining = [
+            row for row in records
+            if parse_int(row.get("id"), 0) != target_id
+        ]
+        if not ApprovalService.save_all(remaining):
+            raise RuntimeError(st.session_state.get("sheet_db_error", "Google Sheet 假單刪除失敗"))
+        return dict(target)
 
     @staticmethod
     def process_action(approval, action, reason="", signer_name=None, transfer_to=None):
