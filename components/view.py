@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 import streamlit as st
 
 from services.sheet_db import SheetDB, SheetDiagnostics
+from services.teams_service import teams_service
 from services.core import (
     UserService, TaskService, MeetingService, ApprovalService, AnnouncementService,
     bool_text, parse_int, now_text
@@ -87,6 +88,13 @@ class ViewComponents:
 
     @staticmethod
     def render_announcement_board():
+        publish_notice = st.session_state.pop("_announcement_publish_notice", None)
+        if publish_notice:
+            notice_type = publish_notice.get("type", "info")
+            notice_message = publish_notice.get("message", "")
+            notice_renderer = getattr(st, notice_type, st.info)
+            notice_renderer(notice_message)
+
         level_icon = {"一般": "📌", "重要": "⚠️", "緊急": "🚨", "維護": "🛠️"}
         level_label = {"一般": "一般公告", "重要": "重要公告", "緊急": "緊急公告", "維護": "維護公告"}
         user = "訪客"
@@ -164,7 +172,36 @@ class ViewComponents:
                                     author=author,
                                     account=publisher.get("account", publisher_account),
                                 )
-                                st.success(f"✅ 公告已成功寫入 Google Sheet。發布人：{author}")
+
+                                teams_result = teams_service.send_bulletin(
+                                    title=f"📢 {level_label.get(level, '一般公告')}｜{title.strip()}",
+                                    message=content.strip(),
+                                    level=level,
+                                    facts={
+                                        "發布人": author,
+                                        "公告等級": level,
+                                        "到期日": expires_at.isoformat(),
+                                        "跑馬燈置頂": "是" if pinned else "否",
+                                        "附件": attachment.name if attachment else "無",
+                                    },
+                                )
+                                if teams_result.get("ok"):
+                                    st.session_state["_announcement_publish_notice"] = {
+                                        "type": "success",
+                                        "message": (
+                                            f"✅ 公告已成功寫入 Google Sheet，並發布至 Teams 布告欄頻道。"
+                                            f"發布人：{author}"
+                                        ),
+                                    }
+                                else:
+                                    teams_error = teams_result.get("message", "未知錯誤")
+                                    st.session_state["_announcement_publish_notice"] = {
+                                        "type": "warning",
+                                        "message": (
+                                            f"⚠️ 公告已成功寫入 Google Sheet，但 Teams 布告欄通知失敗："
+                                            f"{teams_error}"
+                                        ),
+                                    }
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ 公告寫入 Google Sheet 失敗：{e}")
