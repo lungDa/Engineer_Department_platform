@@ -310,9 +310,14 @@ class NotificationService:
                     if not item["result"].get("ok")
                 ]
                 if failed_names:
+                    failure_details = [
+                        f"{item['name']}：{item['result'].get('message') or '未知錯誤'}"
+                        for item in deliveries
+                        if not item["result"].get("ok")
+                    ]
                     results["line"] = {
                         "ok": False,
-                        "message": f"LINE 個人推播失敗：{'、'.join(failed_names)}",
+                        "message": "LINE 個人推播失敗｜" + "；".join(failure_details),
                         "data": {"deliveries": deliveries},
                     }
                 else:

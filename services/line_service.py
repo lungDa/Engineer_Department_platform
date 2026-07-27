@@ -95,9 +95,22 @@ class LineService(BaseService):
 
     def push_text(self, user_id: str, text: str) -> dict:
         if not self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN"):
-            return failed("LINE 個人推播需要在執行環境設定 Channel Access Token。")
+            self.logger.error(
+                "LINE push skipped: LINE_CHANNEL_ACCESS_TOKEN is missing in this runtime."
+            )
+            return failed(
+                "目前執行 Streamlit 的環境未讀到 LINE_CHANNEL_ACCESS_TOKEN。",
+                {"reason": "missing_access_token"},
+            )
         if not user_id:
-            return failed("缺少 LINE user_id。")
+            self.logger.error("LINE push skipped: user_id is missing.")
+            return failed("缺少 LINE User ID。", {"reason": "missing_user_id"})
+        if not str(user_id).startswith("U"):
+            self.logger.error("LINE push skipped: user_id does not start with U.")
+            return failed(
+                "LINE User ID 格式錯誤（必須以 U 開頭）。",
+                {"reason": "invalid_user_id_format"},
+            )
         return self._post_direct(
             self.PUSH_ENDPOINT,
             {
@@ -123,11 +136,24 @@ class LineService(BaseService):
                     response.text,
                 )
                 return failed(
-                    f"LINE {action} failed: {response.status_code}",
-                    response.text,
+                    f"LINE API 回傳 {response.status_code}：{response.text[:1000]}",
+                    {
+                        "status_code": response.status_code,
+                        "request_id": response.headers.get("x-line-request-id", ""),
+                        "response": response.text[:1000],
+                    },
                 )
+            self.logger.info(
+                "LINE %s sent: status=%s request_id=%s",
+                action,
+                response.status_code,
+                response.headers.get("x-line-request-id", ""),
+            )
             return success(
-                {"status_code": response.status_code},
+                {
+                    "status_code": response.status_code,
+                    "request_id": response.headers.get("x-line-request-id", ""),
+                },
                 f"LINE {action} sent.",
             )
         except Exception as exc:

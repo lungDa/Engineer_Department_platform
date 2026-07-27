@@ -23,7 +23,16 @@ def show_notification_result(result):
         elif channel_result.get("ok"):
             st.success(f"{label}：成功（{message}）" if message else f"{label}：成功")
         else:
-            st.warning(f"{label}：失敗（{message}）")
+            st.error(f"{label}：失敗（{message}）")
+            if channel == "line":
+                deliveries = (channel_result.get("data") or {}).get("deliveries", [])
+                for delivery in deliveries:
+                    delivery_result = delivery.get("result") or {}
+                    if not delivery_result.get("ok"):
+                        st.caption(
+                            f"{delivery.get('name', '未知人員')}："
+                            f"{delivery_result.get('message') or '未知錯誤'}"
+                        )
 
 
 pending_notification = st.session_state.pop("leave_notification_result", None)
