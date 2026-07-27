@@ -34,6 +34,7 @@ def get_runtime_secret(name: str, default: str = "") -> str:
             "LINE_CHANNEL_SECRET": ("line", "LINE"),
             "LINE_CHANNEL_ACCESS_TOKEN": ("line", "LINE"),
             "M365_WEBHOOK_TOKEN": ("m365", "M365"),
+            "M365_BULLETIN_WEBHOOK_URL": ("m365", "M365"),
             "API_BASE_URL": ("api", "API"),
         }
         for section_name in section_aliases.get(name, ()):
@@ -76,6 +77,7 @@ class Settings:
     line_channel_access_token: str = _get_secret("LINE_CHANNEL_ACCESS_TOKEN")
 
     teams_webhook_url: str = os.getenv("TEAMS_WEBHOOK_URL", "")
+    bulletin_webhook_url: str = _get_secret("M365_BULLETIN_WEBHOOK_URL")
     outlook_webhook_url: str = os.getenv("OUTLOOK_WEBHOOK_URL", "")
     m365_webhook_token: str = _get_secret("M365_WEBHOOK_TOKEN")
 
