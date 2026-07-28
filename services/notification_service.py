@@ -94,7 +94,36 @@ class NotificationService:
             results["outlook"] = self._skipped("未選擇 Outlook。")
 
         if "line" in enabled:
-            results["line"] = line_service.broadcast_text(message)
+            line_targets = [
+                (
+                    str(user.get("name") or "").strip(),
+                    str(user.get("line_user_id") or "").strip(),
+                )
+                for user in contacts
+                if str(user.get("line_user_id") or "").strip()
+            ]
+            if not line_targets:
+                results["line"] = self._skipped("指派人員尚未設定 LINE User ID。")
+            else:
+                line_results = [
+                    (name, line_service.push_text(line_user_id, message))
+                    for name, line_user_id in line_targets
+                ]
+                failed_names = [
+                    name for name, result in line_results if not result.get("ok")
+                ]
+                results["line"] = {
+                    "ok": not failed_names,
+                    "message": (
+                        f"LINE 已個別通知：{'、'.join(name for name, _ in line_targets)}"
+                        if not failed_names
+                        else f"LINE 個人通知失敗：{'、'.join(failed_names)}"
+                    ),
+                    "data": {
+                        "recipient_count": len(line_targets),
+                        "failed_names": failed_names,
+                    },
+                }
         else:
             results["line"] = self._skipped("未選擇 LINE。")
 

@@ -20,6 +20,16 @@ class TaskService(BaseService):
     def save_all(self, records: list[dict]) -> None:
         return task_repository.save_all(records)
 
+    def create(
+        self,
+        task: dict,
+        *,
+        author: str | None = None,
+        account: str | None = None,
+    ) -> dict:
+        task_repository.append(task, author=author, account=account)
+        return dict(task)
+
     def query(
         self,
         status: str | None = None,

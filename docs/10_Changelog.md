@@ -1,5 +1,13 @@
 # 10 Changelog
 
+## 2026-07-28 LINE 反向建立任務
+
+- 新增 LINE `#任務` 反向建立流程
+- 使用 `line_user_id` 驗證已綁定的啟用人員，不在任務訊息內傳送密碼
+- 驗證必要欄位、截止日期、重要度、緊急度及指派人員姓名
+- 成功後寫入平台與 Google Sheet `Tasks`，並通知 Teams、Outlook、LINE
+- 任務 LINE 通知改為指派人員個別推播，不再使用全好友廣播
+
 ## V5.6.0 Microsoft 365 Notifications Foundation
 
 - 新增 Teams Power Automate Webhook 通知服務

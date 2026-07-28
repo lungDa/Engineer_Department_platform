@@ -1,6 +1,7 @@
 from line_handlers.announcement_commands import announcements_text
 from line_handlers.binding_commands import bind_line_account
 from line_handlers.system_commands import help_text, status_text
+from line_handlers.task_create_commands import create_task_from_line
 from line_handlers.task_commands import my_tasks_text
 
 
@@ -14,6 +15,10 @@ class LineCommandRouter:
         binding_reply = bind_line_account(text=text, user_id=user_id)
         if binding_reply is not None:
             return binding_reply
+
+        task_create_reply = create_task_from_line(text=text, user_id=user_id)
+        if task_create_reply is not None:
+            return task_create_reply
 
         command = self.normalize(text)
 
@@ -35,7 +40,8 @@ class LineCommandRouter:
             "・說明\n"
             "・狀態\n"
             "・我的任務\n"
-            "・公告"
+            "・公告\n"
+            "・#任務（建立任務）"
         )
 
 
