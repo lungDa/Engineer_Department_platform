@@ -9,6 +9,7 @@ router = APIRouter(prefix="/api/notifications", tags=["Microsoft 365 Notificatio
 
 
 class TeamsNotificationRequest(BaseModel):
+    recipients: list[str] = Field(min_length=1)
     title: str = Field(min_length=1, max_length=200)
     message: str = Field(min_length=1, max_length=5000)
     level: str = Field(default="info", max_length=20)

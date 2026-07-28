@@ -27,6 +27,14 @@ class NotificationService:
     def _skipped(message: str) -> dict:
         return {"ok": True, "skipped": True, "message": message, "data": None}
 
+    @staticmethod
+    def _m365_emails(contacts: Iterable[dict]) -> list[str]:
+        return list(dict.fromkeys(
+            str(user.get("email") or user.get("m365_upn") or "").strip()
+            for user in contacts
+            if str(user.get("email") or user.get("m365_upn") or "").strip()
+        ))
+
     def send_task_event(
         self,
         *,
@@ -60,12 +68,18 @@ class NotificationService:
         results: dict[str, dict] = {}
 
         if "teams" in enabled:
-            results["teams"] = teams_service.send(
-                title=f"工程部平台｜{event_title}",
-                message=f"{title}（{progress}%）",
-                level="warning" if event in {"overdue", "deleted"} else "info",
-                facts={"部門": department, "指派人員": names, "截止日期": due, "操作人": actor},
-                source_url=get_settings().streamlit_base_url,
+            teams_recipients = self._m365_emails(contacts)
+            results["teams"] = (
+                teams_service.send(
+                    title=f"工程部平台｜{event_title}",
+                    message=f"{title}（{progress}%）",
+                    recipients=teams_recipients,
+                    level="warning" if event in {"overdue", "deleted"} else "info",
+                    facts={"部門": department, "指派人員": names, "截止日期": due, "操作人": actor},
+                    source_url=get_settings().streamlit_base_url,
+                )
+                if teams_recipients
+                else self._skipped("指派人員尚未設定 M365 Email。")
             )
         else:
             results["teams"] = self._skipped("未選擇 Teams。")
@@ -147,12 +161,18 @@ class NotificationService:
 
         results: dict[str, dict] = {}
         if "teams" in enabled:
-            results["teams"] = teams_service.send(
-                title=f"工程部平台｜{event_title}",
-                message=title,
-                level="warning" if event == "cancelled" else "info",
-                facts=facts,
-                source_url=get_settings().streamlit_base_url,
+            teams_recipients = self._m365_emails(contacts)
+            results["teams"] = (
+                teams_service.send(
+                    title=f"工程部平台｜{event_title}",
+                    message=title,
+                    recipients=teams_recipients,
+                    level="warning" if event == "cancelled" else "info",
+                    facts=facts,
+                    source_url=get_settings().streamlit_base_url,
+                )
+                if teams_recipients
+                else self._skipped("與會者尚未設定 M365 Email。")
             )
         else:
             results["teams"] = self._skipped("未選擇 Teams。")
@@ -230,19 +250,27 @@ class NotificationService:
         results: dict[str, dict] = {}
 
         if "teams" in enabled:
-            results["teams"] = teams_service.send(
-                title=f"工程部平台｜{event_title}",
-                message=f"{actor}｜{leave_type}",
-                level="warning" if event == "deleted" else "info",
-                facts={
-                    "申請人": actor,
-                    "假別": leave_type,
-                    "日期": f"{start_date} ～ {end_date}",
-                    "時段": f"{start_time} ～ {end_time}（{leave_hours} 小時）",
-                    "被通知者": names,
-                    "請假說明": content,
-                },
-                source_url=get_settings().streamlit_base_url,
+            teams_recipients = self._m365_emails(contacts)
+            results["teams"] = (
+                teams_service.send(
+                    title=f"工程部平台｜{event_title}",
+                    message=f"{actor}｜{leave_type}",
+                    recipients=teams_recipients,
+                    level="warning" if event == "deleted" else "info",
+                    facts={
+                        "申請人": actor,
+                        "假別": leave_type,
+                        "日期": f"{start_date} ～ {end_date}",
+                        "時段": f"{start_time} ～ {end_time}（{leave_hours} 小時）",
+                        "被通知者": names,
+                        "請假說明": content,
+                    },
+                    source_url=get_settings().streamlit_base_url,
+                )
+                if teams_recipients
+                else self._skipped(
+                    f"被通知者尚未設定 M365 Email：{names}"
+                )
             )
         else:
             results["teams"] = self._skipped("未選擇 Teams。")

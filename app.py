@@ -119,7 +119,12 @@ def render_enterprise_diagnostics():
 
         st.write("---")
         st.markdown("##### 🧪 Teams 通知測試")
-        st.caption("按下按鈕後，平台會透過目前設定的 Power Automate Webhook 傳送一則測試訊息。")
+        st.caption("輸入 M365 Email 後，平台會透過目前設定的 Power Automate Webhook 傳送一則個別測試訊息。")
+        teams_test_recipient = st.text_input(
+            "Teams 測試收件者（M365 Email）",
+            placeholder="例如：0496@retech.com.tw",
+            key="teams_test_recipient",
+        )
 
         if not m365["teams_configured"]:
             st.warning("TEAMS_WEBHOOK_URL 尚未設定，無法發送測試通知。")
@@ -128,17 +133,25 @@ def render_enterprise_diagnostics():
             key="send_teams_test_notification",
             width="stretch",
         ):
-            st.toast("已收到測試指令，正在連線 Teams…", icon="📨")
-            with st.spinner("正在傳送 Teams 測試通知..."):
-                result = teams_service.send(
-                    title="工程一部管理平台｜Teams 連線測試",
-                    message="Teams Webhook 已成功連接工程一部管理平台。",
-                    level="success",
-                    facts={
-                        "測試項目": "Power Automate → Teams",
-                        "執行位置": "開發者診斷中心",
-                    },
-                )
+            if not teams_test_recipient.strip():
+                result = {
+                    "ok": False,
+                    "message": "請先輸入 Teams 測試收件者的 M365 Email。",
+                    "data": None,
+                }
+            else:
+                st.toast("已收到測試指令，正在連線 Teams…", icon="📨")
+                with st.spinner("正在傳送 Teams 測試通知..."):
+                    result = teams_service.send(
+                        title="工程一部管理平台｜Teams 連線測試",
+                        message="Teams Webhook 已成功連接工程一部管理平台。",
+                        recipients=[teams_test_recipient],
+                        level="success",
+                        facts={
+                            "測試項目": "Power Automate → Teams",
+                            "執行位置": "開發者診斷中心",
+                        },
+                    )
 
             st.session_state["teams_test_result"] = result
 

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Iterable
 
 import requests
 
@@ -34,23 +34,66 @@ class TeamsService(BaseService):
         self,
         title: str,
         message: str,
+        recipients: Iterable[str] | None = None,
         level: str = "info",
         facts: dict[str, Any] | None = None,
         source_url: str = "",
     ) -> dict:
+        """Send one personal Teams message to every M365 recipient."""
         settings = get_settings()
         if not self.is_configured():
             return failed("Teams Power Automate Webhook 尚未設定。")
 
-        return self._send_to_webhook(
-            webhook_url=settings.teams_webhook_url,
-            title=title,
-            message=message,
-            level=level,
-            facts=facts,
-            source_url=source_url,
-            success_message="Teams 通知已送出。",
-            failure_label="Teams 通知",
+        targets = list(dict.fromkeys(
+            str(recipient).strip()
+            for recipient in (recipients or [])
+            if str(recipient).strip()
+        ))
+        if not targets:
+            return failed("Teams 通知失敗：被通知者尚未設定 M365 Email。")
+
+        message_lines = [str(message).strip()]
+        message_lines.extend(
+            f"{key}：{value}"
+            for key, value in (facts or {}).items()
+            if str(value).strip()
+        )
+        if source_url:
+            message_lines.append(f"開啟管理平台：{source_url}")
+        personal_message = "\n".join(line for line in message_lines if line)
+
+        deliveries = [
+            {
+                "recipient": recipient,
+                "result": self._post_json(
+                    webhook_url=settings.teams_webhook_url,
+                    payload={
+                        "recipient": recipient,
+                        "title": str(title)[:200],
+                        "message": personal_message[:5000],
+                    },
+                    failure_label="Teams 個別通知",
+                ),
+            }
+            for recipient in targets
+        ]
+        failed_deliveries = [
+            delivery for delivery in deliveries
+            if not delivery["result"].get("ok")
+        ]
+        if failed_deliveries:
+            return failed(
+                "Teams 個別通知部分或全部失敗。",
+                {
+                    "deliveries": deliveries,
+                    "failed_recipients": [
+                        delivery["recipient"] for delivery in failed_deliveries
+                    ],
+                },
+            )
+        return success(
+            {"deliveries": deliveries},
+            f"Teams 已個別通知 {len(deliveries)} 人。",
         )
 
     def send_bulletin(
@@ -160,27 +203,57 @@ class TeamsService(BaseService):
             headers["X-Platform-Token"] = settings.m365_webhook_token
 
         try:
+            result = self._post_json(
+                webhook_url=webhook_url,
+                payload=payload,
+                failure_label=failure_label,
+                headers=headers,
+            )
+            if not result.get("ok"):
+                return result
+            return success(result.get("data"), success_message)
+        except requests.RequestException as exc:
+            self.logger.exception("%s webhook exception.", failure_label)
+            return failed(f"{failure_label}連線失敗：{exc.__class__.__name__}")
+
+    def _post_json(
+        self,
+        *,
+        webhook_url: str,
+        payload: dict[str, Any],
+        failure_label: str,
+        headers: dict[str, str] | None = None,
+    ) -> dict:
+        request_headers = {"Content-Type": "application/json"}
+        request_headers.update(headers or {})
+        try:
             response = requests.post(
                 webhook_url,
-                headers=headers,
+                headers=request_headers,
                 json=payload,
                 timeout=15,
             )
+            response_excerpt = response.text[:1000]
             if response.status_code >= 400:
-                self.logger.error("%s webhook failed: HTTP %s", failure_label, response.status_code)
+                self.logger.error(
+                    "%s webhook failed: HTTP %s | response=%s",
+                    failure_label,
+                    response.status_code,
+                    response_excerpt or "(empty)",
+                )
                 return failed(
                     f"{failure_label}失敗：HTTP {response.status_code}",
                     {
                         "status_code": response.status_code,
-                        "response": response.text[:500],
+                        "response": response_excerpt,
                     },
                 )
             return success(
                 {
                     "status_code": response.status_code,
-                    "response": response.text[:500],
+                    "response": response_excerpt,
                 },
-                success_message,
+                f"{failure_label}已送出。",
             )
         except requests.RequestException as exc:
             self.logger.exception("%s webhook exception.", failure_label)
