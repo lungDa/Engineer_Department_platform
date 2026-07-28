@@ -18,6 +18,9 @@ router = APIRouter(
 M365_SYNC_SOURCE = "m365"
 M365_SYNC_SCOPE = "工程一部"
 UNCLASSIFIED_DEPARTMENT = "待分類"
+# LINE 綁定只由平台後台或 LINE Webhook 管理。Microsoft 365 同步無論
+# 收到什麼資料，都不得清空或覆蓋這個欄位。
+SYNC_PROTECTED_FIELDS = ("line_user_id",)
 
 
 class M365User(BaseModel):
@@ -245,6 +248,10 @@ def sync_m365_users(
         }
 
         if index is not None:
+            protected_values = {
+                field: users[index].get(field, "")
+                for field in SYNC_PROTECTED_FIELDS
+            }
             users[index].update(directory_fields)
             for field, incoming_value in fill_if_blank_fields.items():
                 if (
@@ -252,6 +259,8 @@ def sync_m365_users(
                     and str(incoming_value or "").strip()
                 ):
                     users[index][field] = str(incoming_value).strip()
+            # 防止日後同步欄位擴充或整列合併時誤洗 LINE 綁定資料。
+            users[index].update(protected_values)
             users[index]["account"] = account
             users[index]["active"] = "TRUE"
 

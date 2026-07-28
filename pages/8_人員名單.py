@@ -516,7 +516,12 @@ if management_unlocked:
                 line_user_id = st.text_input(
                     "LINE User ID（選填）",
                     value=str((selected_user or {}).get("line_user_id", "")),
-                    help="LINE Webhook 取得的 User ID，通常以 U 開頭；不是 LINE 顯示名稱。",
+                    help=(
+                        "可手動補登或修改。M365 同步不會清空或覆蓋此欄；"
+                        "若格式或帳號有誤，只會在實際觸發 LINE 通知時提醒。"
+                        "請填 LINE Webhook 取得、以 U 開頭的 User ID，"
+                        "不是 LINE 顯示名稱。"
+                    ),
                 )
             with st.expander("Microsoft 365 詳細資料（可手動補登）", expanded=False):
                 st.caption(

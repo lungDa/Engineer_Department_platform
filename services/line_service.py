@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import re
 from typing import Any
 
 import requests
@@ -102,19 +103,21 @@ class LineService(BaseService):
                 "目前執行 Streamlit 的環境未讀到 LINE_CHANNEL_ACCESS_TOKEN。",
                 {"reason": "missing_access_token"},
             )
-        if not user_id:
+        normalized_user_id = str(user_id or "").strip()
+        if not normalized_user_id:
             self.logger.error("LINE push skipped: user_id is missing.")
             return failed("缺少 LINE User ID。", {"reason": "missing_user_id"})
-        if not str(user_id).startswith("U"):
-            self.logger.error("LINE push skipped: user_id does not start with U.")
+        if not re.fullmatch(r"U[0-9a-fA-F]{32}", normalized_user_id):
+            self.logger.error("LINE push skipped: invalid LINE User ID format.")
             return failed(
-                "LINE User ID 格式錯誤（必須以 U 開頭）。",
+                "LINE User ID 格式錯誤（應為 U 開頭加 32 碼英數識別碼）；"
+                "請至人員名單後台修正，本次資料不會被清除。",
                 {"reason": "invalid_user_id_format"},
             )
         return self._post_direct(
             self.PUSH_ENDPOINT,
             {
-                "to": user_id,
+                "to": normalized_user_id,
                 "messages": [{"type": "text", "text": str(text or "")[:5000]}],
             },
             "push",
