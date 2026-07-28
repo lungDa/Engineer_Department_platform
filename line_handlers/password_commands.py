@@ -55,7 +55,7 @@ def change_password_from_line(text: str, user_id: str | None) -> str | None:
 
     if not started_at:
         return "⌛ 修改密碼已逾時，請重新輸入「修改密碼」。" if expired else None
-    if message in {"#任務", "＃任務", "#請假", "＃請假"}:
+    if message in {"#任務", "＃任務", "#請假", "＃請假", "#加班", "＃加班"}:
         with _sessions_lock:
             _sessions.pop(target, None)
         return None

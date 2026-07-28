@@ -1,6 +1,7 @@
 from line_handlers.announcement_commands import announcements_text
 from line_handlers.binding_commands import bind_line_account
 from line_handlers.leave_create_commands import create_leave_from_line
+from line_handlers.overtime_create_commands import create_overtime_from_line
 from line_handlers.password_commands import change_password_from_line
 from line_handlers.system_commands import help_text, status_text
 from line_handlers.task_create_commands import create_task_from_line
@@ -22,6 +23,8 @@ class LineCommandRouter:
         raw = str(text or "").strip()
         if raw in {"#請假", "＃請假"}:
             return create_leave_from_line(text=text, user_id=user_id)
+        if raw in {"#加班", "＃加班"}:
+            return create_overtime_from_line(text=text, user_id=user_id)
         if raw in {"#任務", "＃任務"}:
             return create_task_from_line(text=text, user_id=user_id)
 
@@ -32,6 +35,10 @@ class LineCommandRouter:
         leave_reply = create_leave_from_line(text=text, user_id=user_id)
         if leave_reply is not None:
             return leave_reply
+
+        overtime_reply = create_overtime_from_line(text=text, user_id=user_id)
+        if overtime_reply is not None:
+            return overtime_reply
 
         task_create_reply = create_task_from_line(text=text, user_id=user_id)
         if task_create_reply is not None:
@@ -61,6 +68,7 @@ class LineCommandRouter:
             "・修改密碼\n"
             "・#任務（建立任務）\n"
             "・#請假（建立請假申請）"
+            "\n・#加班（建立加班申請）"
         )
 
 

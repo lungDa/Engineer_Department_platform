@@ -245,7 +245,7 @@ class NotificationService:
         actor: str,
         channels: Iterable[str] = ("teams", "outlook", "line"),
     ) -> dict:
-        """Notify the selected people after a leave request is saved."""
+        """Notify the selected people after a leave or overtime request is saved."""
         enabled = {str(channel).strip().lower() for channel in channels}
         notified_users = approval.get("notified_users") or []
         if isinstance(notified_users, str):
@@ -257,7 +257,9 @@ class NotificationService:
 
         contacts = self._contacts(notified_users)
         names = "、".join(notified_users) or "未指定"
-        leave_type = str(approval.get("leave_type") or "請假")
+        is_overtime = str(approval.get("type") or "").strip() == "加班單"
+        request_name = "加班" if is_overtime else "請假"
+        leave_type = str(approval.get("leave_type") or request_name)
         start_date = str(approval.get("start_date") or "-")
         end_date = str(approval.get("end_date") or start_date)
         start_time = str(approval.get("start_time") or "08:30")
@@ -265,16 +267,16 @@ class NotificationService:
         leave_hours = str(approval.get("leave_hours") or "0")
         content = str(approval.get("content") or "").strip() or "無"
         event_titles = {
-            "created": "新增請假申請",
-            "updated": "請假申請變更",
-            "deleted": "請假申請刪除",
+            "created": f"新增{request_name}申請",
+            "updated": f"{request_name}申請變更",
+            "deleted": f"{request_name}申請刪除",
         }
         event_title = event_titles.get(event, event)
         message = (
             f"事件：{event_title}\n申請人：{actor}\n假別：{leave_type}\n"
             f"日期：{start_date} ～ {end_date}\n"
             f"時段：{start_time} ～ {end_time}（{leave_hours} 小時）\n"
-            f"被通知者：{names}\n請假說明：{content}"
+            f"被通知者：{names}\n{'加班事由' if is_overtime else '請假說明'}：{content}"
         )
         results: dict[str, dict] = {}
 
@@ -292,7 +294,7 @@ class NotificationService:
                         "日期": f"{start_date} ～ {end_date}",
                         "時段": f"{start_time} ～ {end_time}（{leave_hours} 小時）",
                         "被通知者": names,
-                        "請假說明": content,
+                        ("加班事由" if is_overtime else "請假說明"): content,
                     },
                     source_url=get_settings().streamlit_base_url,
                 )
