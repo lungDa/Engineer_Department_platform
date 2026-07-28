@@ -27,6 +27,20 @@ class UserRepository(BaseRepository):
         return records if records is not None else st.session_state.get("user_records_fallback", self.default_rows())
 
     def save_all(self, records: list[dict]) -> bool:
+        # Render M365 同步與 Streamlit 後台是兩個獨立程序。一定要在整表
+        # 覆寫前直接讀 Google Sheet，保留後台已補登的非空白欄位。
+        latest = LegacyUserService.load_all_fresh()
+        latest_by_account = {
+            str(row.get("account", "")).strip().casefold(): row
+            for row in (latest or [])
+            if str(row.get("account", "")).strip()
+        }
+        for row in records:
+            account_key = str(row.get("account", "")).strip().casefold()
+            current = latest_by_account.get(account_key, {})
+            for field in LegacyUserService.MANUAL_PROTECTED_FIELDS:
+                if str(current.get(field, "") or "").strip():
+                    row[field] = current.get(field, "")
         records = sheet_repository.normalize_records(records, self.columns)
         ok = sheet_repository.save_records(self.worksheet_name, self.columns, records)
         if not ok:

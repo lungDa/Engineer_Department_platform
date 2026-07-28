@@ -475,6 +475,29 @@ class SheetDB:
             return None
 
     @staticmethod
+    def load_fresh(name: str, columns: list[str]) -> list[dict[str, Any]] | None:
+        """直接讀取工作表，不經 Streamlit 的跨程序快取。
+
+        Users 同時會由 Streamlit 後台與 Render 的 M365 同步寫入。寫入前若
+        使用任一端的舊快取，整張工作表覆寫時可能把另一端剛補登的欄位洗成
+        舊值或空白，因此保護性合併一律使用這個即時讀取方法。
+        """
+        try:
+            ws = SheetDB.worksheet(name, columns)
+            if not ws:
+                return None
+            return SheetDB.normalize_records(
+                SheetDB.get_records(ws, columns),
+                columns,
+            )
+        except Exception as e:
+            SheetDB._set_error(
+                f"即時讀取工作表 {name} 失敗：{type(e).__name__}: {e}\n"
+                f"{traceback.format_exc()}"
+            )
+            return None
+
+    @staticmethod
     def save(name: str, columns: list[str], records: list[dict[str, Any]]) -> bool:
         ws = SheetDB.worksheet(name, columns)
         if not ws:

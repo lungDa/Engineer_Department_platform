@@ -200,6 +200,16 @@ class UserService:
     "sync_source",
     "m365_scope",
 ]
+    MANUAL_PROTECTED_FIELDS = (
+        "line_user_id",
+        "m365_upn",
+        "m365_department",
+        "job_title",
+        "mobile",
+        "m365_id",
+        "sync_source",
+        "m365_scope",
+    )
 
     @staticmethod
     def default_users():
@@ -218,7 +228,36 @@ class UserService:
         return records if records is not None else st.session_state.get("user_records_fallback", UserService.default_users())
 
     @staticmethod
-    def save_all(records):
+    def load_all_fresh():
+        records = SheetDB.load_fresh(
+            UserService.WORKSHEET_NAME,
+            UserService.COLUMNS,
+        )
+        return records if records is not None else UserService.load_all()
+
+    @staticmethod
+    def save_all(records, manual_overrides=None):
+        """儲存 Users，並避免舊快取洗掉人工補登欄位。
+
+        manual_overrides 是後台明確修改的 {account: {field: value}}。除此之外，
+        Google Sheet 當下的非空白人工欄位永遠優先於呼叫端的快取內容。
+        """
+        manual_overrides = manual_overrides or {}
+        latest = SheetDB.load_fresh(UserService.WORKSHEET_NAME, UserService.COLUMNS)
+        latest_by_account = {
+            str(row.get("account", "")).strip().casefold(): row
+            for row in (latest or [])
+            if str(row.get("account", "")).strip()
+        }
+        for row in records:
+            account_key = str(row.get("account", "")).strip().casefold()
+            current = latest_by_account.get(account_key, {})
+            overrides = manual_overrides.get(account_key, {})
+            for field in UserService.MANUAL_PROTECTED_FIELDS:
+                if field in overrides:
+                    row[field] = str(overrides[field] or "").strip()
+                elif str(current.get(field, "") or "").strip():
+                    row[field] = current.get(field, "")
         records = SheetDB.normalize_records(records, UserService.COLUMNS)
         saved = bool(SheetDB.save(UserService.WORKSHEET_NAME, UserService.COLUMNS, records))
         if not saved:
@@ -450,7 +489,10 @@ class UserService:
 
         target["line_user_id"] = line_id
         target["updated_at"] = now_text()
-        if not UserService.save_all(records):
+        if not UserService.save_all(
+            records,
+            {account_key: {"line_user_id": line_id}},
+        ):
             return False, "綁定資料寫入失敗，請確認 Render 的 Google Sheet 連線設定。", None
         return True, "LINE 帳號綁定成功。", target
 
@@ -518,7 +560,24 @@ class UserService:
                     row["password"] = UserService.DEFAULT_PASSWORD
                     row["must_change_password"] = "TRUE"
                 row["updated_at"] = now
-                UserService.save_all(records)
+                manual_fields = {
+                    "line_user_id": line_user_id,
+                    "m365_upn": m365_upn,
+                    "m365_department": m365_department,
+                    "job_title": job_title,
+                    "mobile": mobile,
+                    "m365_id": m365_id,
+                    "sync_source": sync_source,
+                    "m365_scope": m365_scope,
+                }
+                overrides = {
+                    target: {
+                        field: value
+                        for field, value in manual_fields.items()
+                        if value is not None
+                    }
+                }
+                UserService.save_all(records, overrides)
                 return "updated"
 
         records.append({
