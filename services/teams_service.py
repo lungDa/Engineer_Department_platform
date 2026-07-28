@@ -1,3 +1,4 @@
+import re
 from typing import Any, Iterable
 
 import requests
@@ -11,6 +12,10 @@ class TeamsService(BaseService):
     """Send notifications to a Power Automate Teams webhook flow."""
 
     service_name = "teams"
+    _UPN_PATTERN = re.compile(
+        r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+        re.IGNORECASE,
+    )
 
     def is_configured(self) -> bool:
         return bool(get_settings().teams_webhook_url.strip())
@@ -51,6 +56,22 @@ class TeamsService(BaseService):
         ))
         if not targets:
             return failed("Teams 通知失敗：被通知者尚未設定 M365 Email。")
+
+        invalid_targets = [
+            target for target in targets
+            if not self._UPN_PATTERN.fullmatch(target)
+        ]
+        if invalid_targets:
+            invalid_text = "、".join(invalid_targets)
+            self.logger.warning(
+                "Teams 個別通知未送出：M365 UPN 格式錯誤 | recipients=%s",
+                invalid_text,
+            )
+            return failed(
+                f"Teams 通知未送出：M365 UPN 格式錯誤（{invalid_text}）。"
+                "請至人員名單後台修正。",
+                {"invalid_recipients": invalid_targets},
+            )
 
         message_lines = [str(message).strip()]
         message_lines.extend(

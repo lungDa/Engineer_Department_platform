@@ -477,7 +477,7 @@ class UserService:
     @staticmethod
     def upsert_user(name, account, role, role_level, active=True, reset_password=False,
                     direct_password="", department=None, assignments=None,
-                    email=None, line_user_id=None):
+                    email=None, line_user_id=None, m365_upn=None):
         records = UserService.load_all()
         now = now_text()
         target = str(account).strip().lower()
@@ -495,6 +495,8 @@ class UserService:
                     row["email"] = str(email or "").strip()
                 if line_user_id is not None:
                     row["line_user_id"] = str(line_user_id or "").strip()
+                if m365_upn is not None:
+                    row["m365_upn"] = str(m365_upn or "").strip()
                 if direct_password:
                     row["password"] = str(direct_password)
                     row["must_change_password"] = "TRUE"
@@ -517,6 +519,7 @@ class UserService:
             "assignments": json.dumps(assignments or [], ensure_ascii=False),
             "email": str(email or "").strip(),
             "line_user_id": str(line_user_id or "").strip(),
+            "m365_upn": str(m365_upn or "").strip(),
             "must_change_password": "TRUE",
             "created_at": now,
             "updated_at": now,

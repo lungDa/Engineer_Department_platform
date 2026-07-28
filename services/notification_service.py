@@ -30,9 +30,9 @@ class NotificationService:
     @staticmethod
     def _m365_emails(contacts: Iterable[dict]) -> list[str]:
         return list(dict.fromkeys(
-            str(user.get("email") or user.get("m365_upn") or "").strip()
+            str(user.get("m365_upn") or user.get("email") or "").strip()
             for user in contacts
-            if str(user.get("email") or user.get("m365_upn") or "").strip()
+            if str(user.get("m365_upn") or user.get("email") or "").strip()
         ))
 
     def send_task_event(

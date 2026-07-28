@@ -233,7 +233,6 @@ def sync_m365_users(
         m365_fields = {
             "name": name,
             "email": email,
-            "m365_upn": upn,
             "m365_department": m365_department,
             "m365_job_title": m365_job_title,
             "mobile": str(incoming.mobile or "").strip(),
@@ -244,6 +243,10 @@ def sync_m365_users(
         }
 
         if index is not None:
+            # 平台後台手動補登的 m365_upn 優先。只有既有欄位空白時，
+            # 才使用 Microsoft 365 回傳值補入，避免排程同步洗掉人工資料。
+            if not str(users[index].get("m365_upn") or "").strip() and upn:
+                m365_fields["m365_upn"] = upn
             users[index].update(m365_fields)
             users[index]["account"] = account
             users[index]["active"] = "TRUE"
@@ -269,6 +272,7 @@ def sync_m365_users(
                 "must_change_password": "TRUE",
                 "created_at": now,
                 "last_login_at": "",
+                "m365_upn": upn,
                 **m365_fields,
             }
         )

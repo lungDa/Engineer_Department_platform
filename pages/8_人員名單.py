@@ -495,7 +495,7 @@ if management_unlocked:
                 disabled=selected_user is not None,
                 help="既有人員的帳號作為唯一識別，修改時不可變更。",
             )
-            contact1, contact2 = st.columns(2)
+            contact1, contact2, contact3 = st.columns(3)
             with contact1:
                 email = st.text_input(
                     "公司 Email（Outlook 通知）",
@@ -503,6 +503,16 @@ if management_unlocked:
                     placeholder="name@company.com",
                 )
             with contact2:
+                m365_upn = st.text_input(
+                    "M365 UPN（Teams 個別通知）",
+                    value=str((selected_user or {}).get("m365_upn", "")),
+                    placeholder="0496@retech.com.tw",
+                    help=(
+                        "可手動補登或修改。M365 同步不會覆蓋已填寫的值；"
+                        "格式或帳號若有誤，會在實際觸發 Teams 通知時提示。"
+                    ),
+                )
+            with contact3:
                 line_user_id = st.text_input(
                     "LINE User ID（選填）",
                     value=str((selected_user or {}).get("line_user_id", "")),
@@ -576,6 +586,7 @@ if management_unlocked:
                         assignments=assignments,
                         email=email,
                         line_user_id=line_user_id,
+                        m365_upn=m365_upn,
                     )
                     st.success("人員已新增。" if result == "created" else "人員資料已修改。")
                     st.rerun()
