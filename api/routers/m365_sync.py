@@ -227,27 +227,31 @@ def sync_m365_users(
 
         index = _find_existing_index(users, incoming)
 
-        # 這些欄位由 Microsoft 365 同步管理。
-        # department、job_title 等平台管理欄位不放在此處，
-        # 避免覆蓋使用者於平台或 Google Sheet 的手動設定。
-        m365_fields = {
+        # 姓名、Email 與啟用狀態仍由目錄同步；M365 詳細欄位則採
+        # 「人工值優先、空白才補入」，避免排程洗掉後台補登內容。
+        directory_fields = {
             "name": name,
             "email": email,
+            "updated_at": now,
+        }
+        fill_if_blank_fields = {
+            "m365_upn": upn,
             "m365_department": m365_department,
-            "m365_job_title": m365_job_title,
+            "job_title": m365_job_title,
             "mobile": str(incoming.mobile or "").strip(),
             "m365_id": m365_id,
             "sync_source": M365_SYNC_SOURCE,
             "m365_scope": M365_SYNC_SCOPE,
-            "updated_at": now,
         }
 
         if index is not None:
-            # 平台後台手動補登的 m365_upn 優先。只有既有欄位空白時，
-            # 才使用 Microsoft 365 回傳值補入，避免排程同步洗掉人工資料。
-            if not str(users[index].get("m365_upn") or "").strip() and upn:
-                m365_fields["m365_upn"] = upn
-            users[index].update(m365_fields)
+            users[index].update(directory_fields)
+            for field, incoming_value in fill_if_blank_fields.items():
+                if (
+                    not str(users[index].get(field) or "").strip()
+                    and str(incoming_value or "").strip()
+                ):
+                    users[index][field] = str(incoming_value).strip()
             users[index]["account"] = account
             users[index]["active"] = "TRUE"
 
@@ -272,8 +276,8 @@ def sync_m365_users(
                 "must_change_password": "TRUE",
                 "created_at": now,
                 "last_login_at": "",
-                "m365_upn": upn,
-                **m365_fields,
+                **directory_fields,
+                **fill_if_blank_fields,
             }
         )
 

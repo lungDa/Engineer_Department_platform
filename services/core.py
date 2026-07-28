@@ -477,7 +477,9 @@ class UserService:
     @staticmethod
     def upsert_user(name, account, role, role_level, active=True, reset_password=False,
                     direct_password="", department=None, assignments=None,
-                    email=None, line_user_id=None, m365_upn=None):
+                    email=None, line_user_id=None, m365_upn=None,
+                    m365_department=None, job_title=None, mobile=None,
+                    m365_id=None, sync_source=None, m365_scope=None):
         records = UserService.load_all()
         now = now_text()
         target = str(account).strip().lower()
@@ -497,6 +499,18 @@ class UserService:
                     row["line_user_id"] = str(line_user_id or "").strip()
                 if m365_upn is not None:
                     row["m365_upn"] = str(m365_upn or "").strip()
+                if m365_department is not None:
+                    row["m365_department"] = str(m365_department or "").strip()
+                if job_title is not None:
+                    row["job_title"] = str(job_title or "").strip()
+                if mobile is not None:
+                    row["mobile"] = str(mobile or "").strip()
+                if m365_id is not None:
+                    row["m365_id"] = str(m365_id or "").strip()
+                if sync_source is not None:
+                    row["sync_source"] = str(sync_source or "").strip()
+                if m365_scope is not None:
+                    row["m365_scope"] = str(m365_scope or "").strip()
                 if direct_password:
                     row["password"] = str(direct_password)
                     row["must_change_password"] = "TRUE"
@@ -520,6 +534,12 @@ class UserService:
             "email": str(email or "").strip(),
             "line_user_id": str(line_user_id or "").strip(),
             "m365_upn": str(m365_upn or "").strip(),
+            "m365_department": str(m365_department or "").strip(),
+            "job_title": str(job_title or "").strip(),
+            "mobile": str(mobile or "").strip(),
+            "m365_id": str(m365_id or "").strip(),
+            "sync_source": str(sync_source or "").strip(),
+            "m365_scope": str(m365_scope or "").strip(),
             "must_change_password": "TRUE",
             "created_at": now,
             "updated_at": now,

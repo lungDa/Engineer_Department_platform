@@ -518,6 +518,40 @@ if management_unlocked:
                     value=str((selected_user or {}).get("line_user_id", "")),
                     help="LINE Webhook 取得的 User ID，通常以 U 開頭；不是 LINE 顯示名稱。",
                 )
+            with st.expander("Microsoft 365 詳細資料（可手動補登）", expanded=False):
+                st.caption(
+                    "人工填寫的內容會優先保留；後續 M365 同步只會補齊空白欄位。"
+                )
+                m365_col1, m365_col2 = st.columns(2)
+                with m365_col1:
+                    m365_department = st.text_input(
+                        "M365 部門（m365_department）",
+                        value=str((selected_user or {}).get("m365_department", "")),
+                    )
+                    job_title = st.text_input(
+                        "M365 職稱（job_title）",
+                        value=str((selected_user or {}).get("job_title", "")),
+                    )
+                    mobile = st.text_input(
+                        "M365 手機（mobile）",
+                        value=str((selected_user or {}).get("mobile", "")),
+                    )
+                with m365_col2:
+                    m365_id = st.text_input(
+                        "M365 ID（m365_id）",
+                        value=str((selected_user or {}).get("m365_id", "")),
+                        help="Microsoft 365 使用者的唯一識別碼。輸入錯誤時不會自動清除。",
+                    )
+                    sync_source = st.text_input(
+                        "同步來源（sync_source）",
+                        value=str((selected_user or {}).get("sync_source", "")),
+                        placeholder="m365",
+                    )
+                    m365_scope = st.text_input(
+                        "同步範圍（m365_scope）",
+                        value=str((selected_user or {}).get("m365_scope", "")),
+                        placeholder="工程一部",
+                    )
             department = st.selectbox(
                 "所屬課別",
                 DEPARTMENTS,
@@ -587,6 +621,12 @@ if management_unlocked:
                         email=email,
                         line_user_id=line_user_id,
                         m365_upn=m365_upn,
+                        m365_department=m365_department,
+                        job_title=job_title,
+                        mobile=mobile,
+                        m365_id=m365_id,
+                        sync_source=sync_source,
+                        m365_scope=m365_scope,
                     )
                     st.success("人員已新增。" if result == "created" else "人員資料已修改。")
                     st.rerun()
