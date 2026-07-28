@@ -24,6 +24,37 @@ def record_department(row: dict[str, Any]) -> str:
         return INDEPENDENT_DEPARTMENT
     return str(row.get("department") or DEPARTMENTS[0]).strip()
 
+
+def record_departments(row: dict[str, Any]) -> list[str]:
+    """取得紀錄所屬的全部課別，並相容既有單一課別資料。"""
+    raw = record_department(row)
+    values = [
+        item.strip()
+        for item in raw.replace(",", "、").replace("，", "、").replace(";", "、").replace("；", "、").split("、")
+        if item.strip()
+    ]
+    return list(dict.fromkeys(values)) or [DEPARTMENTS[0]]
+
+
+def task_matches_department(task: dict[str, Any], department: str) -> bool:
+    return str(department or "").strip() in record_departments(task)
+
+
+def assignee_departments(assignees: list[str]) -> list[str]:
+    """依全部指派人員找出任務應顯示的所有主要課別。"""
+    targets = {str(name or "").strip() for name in assignees if str(name or "").strip()}
+    values = [
+        record_department(user)
+        for user in UserService.get_active_users()
+        if str(user.get("name") or "").strip() in targets
+    ]
+    return list(dict.fromkeys(values))
+
+
+def encode_departments(departments: list[str], fallback: str | None = None) -> str:
+    values = [str(item or "").strip() for item in departments if str(item or "").strip()]
+    return "、".join(dict.fromkeys(values)) or str(fallback or current_department()).strip()
+
 def now_text():
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -736,7 +767,7 @@ class TaskService:
 
     @staticmethod
     def load_by_department(department):
-        return [r for r in TaskService.load_all() if record_department(r) == department]
+        return [r for r in TaskService.load_all() if task_matches_department(r, department)]
 
     @staticmethod
     def save_all(records):

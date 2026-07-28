@@ -5,7 +5,12 @@ import streamlit as st
 
 from repositories.base_repository import BaseRepository
 from repositories.sheet_repository import sheet_repository
-from services.core import TaskService as LegacyTaskService, parse_date, parse_int
+from services.core import (
+    TaskService as LegacyTaskService,
+    parse_date,
+    parse_int,
+    task_matches_department,
+)
 
 
 class TaskRepository(BaseRepository):
@@ -51,7 +56,7 @@ class TaskRepository(BaseRepository):
         tasks = self.get_all()
 
         if department:
-            tasks = [task for task in tasks if str(task.get("department") or "儀電規劃課") == department]
+            tasks = [task for task in tasks if task_matches_department(task, department)]
 
         if status:
             tasks = [task for task in tasks if self._match_equal(task.get("status"), status)]

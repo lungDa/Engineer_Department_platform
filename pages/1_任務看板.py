@@ -9,7 +9,9 @@ from utils import (
     SheetDB,
     TaskService,
     UserService,
+    assignee_departments,
     current_department,
+    encode_departments,
     parse_date,
     parse_float,
     parse_int,
@@ -220,7 +222,11 @@ with st.expander("➕ 新增任務", expanded=not tasks):
                     new_task = {
                         "title": title.strip(), "category": category, "due": due,
                         "assignees": assignees, "status": "Active", "progress": 0,
-                        "hours_spent": 0.0, "department": current_department(),
+                        "hours_spent": 0.0,
+                        "department": encode_departments(
+                            assignee_departments(assignees),
+                            fallback=current_department(),
+                        ),
                         "importance": importance, "urgency": urgency,
                         "tags": ",".join(clean_list(estimated_tags)), "notes": notes.strip(),
                         "depends_on": [], "history": [f"[{datetime.now().strftime('%m-%d %H:%M')}] {creator_name} 建立任務"],
@@ -397,6 +403,10 @@ def render_task(task):
                     changes = {
                         "title": edit_title.strip(), "category": edit_category,
                         "due": edit_due, "assignees": edit_assignees,
+                        "department": encode_departments(
+                            assignee_departments(edit_assignees),
+                            fallback=str(task.get("department") or current_department()),
+                        ),
                         "progress": edit_progress,
                         "hours_spent": parse_float(task.get("hours_spent"), 0) + add_hours,
                         "importance": edit_importance, "urgency": edit_urgency,

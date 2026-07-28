@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 import re
 from threading import Lock
 
-from services.core import UserService, record_department
+from services.core import UserService, assignee_departments, encode_departments
 from services.notification_service import notification_service
 from services.task_service import task_service
 
@@ -96,7 +96,8 @@ def _create_task(session: dict, due: date) -> str:
     ).strip()
     content = data["content"]
     assignees = data["assignees"]
-    task_department = record_department(actor)
+    # 同一筆任務會顯示在所有被指派者所屬課別。
+    task_department = encode_departments(assignee_departments(assignees))
     task = {
         # 平台資料結構仍需要 title，直接以使用者輸入的內容作為任務名稱。
         "title": content,

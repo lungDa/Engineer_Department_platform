@@ -18,6 +18,8 @@ from services.core import (
     parse_int,
     parse_json_list,
     current_department,
+    assignee_departments,
+    encode_departments,
 )
 from config.departments import DEPARTMENTS
 from components.view import ViewComponents, StreamFlowEngine
