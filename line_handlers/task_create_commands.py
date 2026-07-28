@@ -96,6 +96,7 @@ def _create_task(session: dict, due: date) -> str:
     ).strip()
     content = data["content"]
     assignees = data["assignees"]
+    task_department = record_department(actor)
     task = {
         # 平台資料結構仍需要 title，直接以使用者輸入的內容作為任務名稱。
         "title": content,
@@ -105,7 +106,7 @@ def _create_task(session: dict, due: date) -> str:
         "status": "Active",
         "progress": 0,
         "hours_spent": 0.0,
-        "department": record_department(actor),
+        "department": task_department,
         "importance": "低",
         "urgency": "低",
         "tags": "",
@@ -148,6 +149,7 @@ def _create_task(session: dict, due: date) -> str:
         f"內容：{content}\n"
         f"指派：{'、'.join(assignees)}\n"
         f"截止：{due:%Y-%m-%d}\n"
+        f"平台課別：{task_department}\n"
         f"建立人：{actor_name}"
         f"{notice}"
     )

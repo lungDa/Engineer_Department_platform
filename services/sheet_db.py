@@ -288,6 +288,10 @@ class SheetDB:
             _cached_sheet_records.clear()
         except Exception:
             pass
+        try:
+            _cached_sheet_bundle.clear()
+        except Exception:
+            pass
 
         if sheet_name:
             st.session_state.pop(SheetDB.session_cache_key(sheet_name), None)
@@ -310,6 +314,14 @@ class SheetDB:
         st.session_state["sheet_db_cache_version"] = SheetDB.cache_version() + 1
         try:
             _cached_sheet_records.clear()
+        except Exception:
+            pass
+        # AppInitializer.prefetch() uses the batch cache.  If only the
+        # single-sheet cache is cleared, another Streamlit session can keep
+        # serving the old Tasks bundle for up to five minutes after a LINE/API
+        # append.  Clear both cache layers whenever business data changes.
+        try:
+            _cached_sheet_bundle.clear()
         except Exception:
             pass
         if sheet_name:
