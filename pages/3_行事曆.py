@@ -1,11 +1,154 @@
 import streamlit as st
 import calendar
+from io import BytesIO
 from datetime import date
+
+import pandas as pd
 
 from utils import AppInitializer, ApprovalService, MeetingService, TaskService, ViewComponents
 
 AppInitializer.setup(load_tasks=True, load_meetings=True, load_approvals=True)
 st.header("📅 行事曆")
+
+
+EXPORT_COLUMNS = [
+    "行程類型", "編號", "主旨／假別", "開始日期", "結束日期",
+    "開始時間", "結束時間", "時數", "人員", "部門／課別",
+    "狀態", "標籤／分類", "說明／紀要", "連結",
+]
+
+
+def _date_text(value):
+    return value.strftime("%Y-%m-%d") if isinstance(value, date) else str(value or "")
+
+
+def _month_contains(value, year, month):
+    return isinstance(value, date) and value.year == year and value.month == month
+
+
+def _period_overlaps_month(start_date, end_date, year, month):
+    if not isinstance(start_date, date):
+        return False
+    end_date = end_date if isinstance(end_date, date) else start_date
+    month_start = date(year, month, 1)
+    month_end = date(
+        year,
+        month,
+        calendar.monthrange(year, month)[1],
+    )
+    return start_date <= month_end and end_date >= month_start
+
+
+def build_export_rows(section, year, month, assignees, tags):
+    """依目前分頁、月份及畫面篩選條件建立匯出資料。"""
+    rows = []
+
+    if section in ("綜合", "專案"):
+        filtered_tasks = TaskService.get_filtered_tasks(
+            assignees,
+            tags,
+            st.session_state.tasks,
+        )
+        for task in filtered_tasks:
+            if not _month_contains(task.get("due"), year, month):
+                continue
+            rows.append({
+                "行程類型": "任務",
+                "編號": task.get("id", ""),
+                "主旨／假別": task.get("title", ""),
+                "開始日期": _date_text(task.get("due")),
+                "結束日期": _date_text(task.get("due")),
+                "開始時間": "",
+                "結束時間": "",
+                "時數": "",
+                "人員": "、".join(task.get("assignees", [])),
+                "部門／課別": task.get("department", ""),
+                "狀態": task.get("status", ""),
+                "標籤／分類": task.get("tags") or task.get("category", ""),
+                "說明／紀要": task.get("description") or task.get("notes", ""),
+                "連結": "",
+            })
+
+        for meeting in MeetingService.get_visible_meetings():
+            if not _month_contains(meeting.get("time"), year, month):
+                continue
+            rows.append({
+                "行程類型": "會議",
+                "編號": meeting.get("id", ""),
+                "主旨／假別": meeting.get("title", ""),
+                "開始日期": _date_text(meeting.get("time")),
+                "結束日期": _date_text(meeting.get("time")),
+                "開始時間": "",
+                "結束時間": "",
+                "時數": "",
+                "人員": "、".join(meeting.get("attendees", [])),
+                "部門／課別": meeting.get("department", ""),
+                "狀態": "",
+                "標籤／分類": "",
+                "說明／紀要": meeting.get("notes", ""),
+                "連結": meeting.get("link", ""),
+            })
+
+    approval_types = []
+    if section in ("綜合", "請假"):
+        approval_types.append("請假單")
+    if section in ("綜合", "加班"):
+        approval_types.append("加班單")
+
+    for approval in st.session_state.approvals:
+        if approval.get("type") not in approval_types:
+            continue
+        if not _period_overlaps_month(
+            approval.get("start_date"),
+            approval.get("end_date"),
+            year,
+            month,
+        ):
+            continue
+        rows.append({
+            "行程類型": "請假" if approval.get("type") == "請假單" else "加班",
+            "編號": approval.get("id", ""),
+            "主旨／假別": approval.get("leave_type", ""),
+            "開始日期": _date_text(approval.get("start_date")),
+            "結束日期": _date_text(approval.get("end_date")),
+            "開始時間": approval.get("start_time", ""),
+            "結束時間": approval.get("end_time", ""),
+            "時數": approval.get("leave_hours", ""),
+            "人員": approval.get("sender", ""),
+            "部門／課別": approval.get("department", ""),
+            "狀態": approval.get("status", ""),
+            "標籤／分類": "",
+            "說明／紀要": approval.get("content", ""),
+            "連結": "",
+        })
+
+    return sorted(
+        rows,
+        key=lambda row: (
+            row.get("開始日期", ""),
+            row.get("開始時間", ""),
+            row.get("行程類型", ""),
+            str(row.get("編號", "")),
+        ),
+    )
+
+
+def export_files(rows, section):
+    frame = pd.DataFrame(rows, columns=EXPORT_COLUMNS)
+    csv_data = frame.to_csv(index=False).encode("utf-8-sig")
+
+    excel_data = BytesIO()
+    with pd.ExcelWriter(excel_data, engine="openpyxl") as writer:
+        frame.to_excel(writer, index=False, sheet_name=section)
+        worksheet = writer.book[section]
+        worksheet.freeze_panes = "A2"
+        worksheet.auto_filter.ref = worksheet.dimensions
+        for column_cells in worksheet.columns:
+            values = [str(cell.value or "") for cell in column_cells]
+            width = min(max(max(map(len, values), default=0) + 2, 10), 36)
+            worksheet.column_dimensions[column_cells[0].column_letter].width = width
+
+    return csv_data, excel_data.getvalue()
 
 
 f_assignees, f_tags = ViewComponents.render_filters()
@@ -50,6 +193,43 @@ with nav4:
         if st.session_state.cal_month == 1:
             st.session_state.cal_year += 1
         st.rerun()
+
+export_rows = build_export_rows(
+    schedule_type,
+    st.session_state.cal_year,
+    st.session_state.cal_month,
+    f_assignees,
+    f_tags,
+)
+csv_data, excel_data = export_files(export_rows, schedule_type)
+export_name = (
+    f"行事曆_{schedule_type}_"
+    f"{st.session_state.cal_year}{st.session_state.cal_month:02d}"
+)
+export_col1, export_col2, export_col3 = st.columns([1, 1, 2])
+with export_col1:
+    st.download_button(
+        "⬇️ 匯出 Excel",
+        data=excel_data,
+        file_name=f"{export_name}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+        key=f"calendar_export_xlsx_{schedule_type}",
+    )
+with export_col2:
+    st.download_button(
+        "⬇️ 匯出 CSV",
+        data=csv_data,
+        file_name=f"{export_name}.csv",
+        mime="text/csv",
+        use_container_width=True,
+        key=f"calendar_export_csv_{schedule_type}",
+    )
+with export_col3:
+    st.caption(
+        f"匯出範圍：{st.session_state.cal_year} 年 "
+        f"{st.session_state.cal_month} 月・{schedule_type}・共 {len(export_rows)} 筆"
+    )
 
 cal = calendar.Calendar(firstweekday=6)
 month_days = cal.monthdayscalendar(
