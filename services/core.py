@@ -543,7 +543,8 @@ class UserService:
                 row["password"] = str(new_password)
                 row["must_change_password"] = "FALSE"
                 row["updated_at"] = now_text()
-                UserService.save_all(records)
+                if not UserService.save_all(records):
+                    return False, "密碼寫入失敗，請確認 Google Sheet 連線。"
                 return True, "密碼已更新。"
         return False, "找不到帳號。"
 
