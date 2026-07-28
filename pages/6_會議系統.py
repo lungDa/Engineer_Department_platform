@@ -31,7 +31,7 @@ if pending_notification:
     show_notification_result(pending_notification)
 
 
-with st.expander("➕ 登記新會議", expanded=True):
+with st.expander("➕ 登記新會議", expanded=False):
     all_people = UserService.get_all_partner_names(current_department())
     st.caption(f"目前部門「{current_department()}」的人員會排在最上方，其餘部門人員也可選擇。")
     pick_col, dept_col, all_col, clear_col = st.columns([2.4, 1, 1, 1])

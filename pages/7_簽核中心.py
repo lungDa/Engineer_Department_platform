@@ -69,7 +69,7 @@ def validate_leave_period(start_date, end_date, start_time, end_time, leave_hour
     return ""
 
 
-with st.expander("🌙 提出加班申請", expanded=True):
+with st.expander("🌙 提出加班申請", expanded=False):
     with st.form("overtime_request_form", clear_on_submit=False):
         overtime_type = st.selectbox(
             "加班類型",
@@ -149,7 +149,7 @@ with st.expander("🌙 提出加班申請", expanded=True):
                     except Exception as exc:
                         st.error(f"加班申請寫入失敗：{exc}")
 
-with st.expander("📝 提出請假申請", expanded=True):
+with st.expander("📝 提出請假申請", expanded=False):
     with st.form("leave_request_form", clear_on_submit=False):
         leave_type = st.selectbox(
             "假別",
@@ -299,7 +299,7 @@ for approval in sorted(
             st.write(f"**說明：** {approval['content']}")
         st.write(f"**被通知者：** {', '.join(approval.get('notified_users', [])) or '無'}")
 
-        with st.expander("✏️ 修改／刪除"):
+        with st.expander("✏️ 修改／刪除", expanded=False):
             edit_leave_type = st.selectbox(
                 "假別",
                 ["特休", "事假", "病假", "公假", "婚假", "喪假", "其他"],
@@ -435,6 +435,6 @@ for approval in sorted(
                         except Exception as exc:
                             st.error(str(exc))
 
-        with st.expander("📜 操作紀錄"):
+        with st.expander("📜 操作紀錄", expanded=False):
             for entry in approval.get("history", []):
                 st.caption(entry)

@@ -148,7 +148,7 @@ partner_names = UserService.get_all_partner_names(current_department())
 # =========================================================
 # 新增任務
 # =========================================================
-with st.expander("➕ 新增任務", expanded=not tasks):
+with st.expander("➕ 新增任務", expanded=False):
     if not partner_names:
         st.warning("目前沒有啟用中的人員名單。請先在人員名單新增人員。")
 
@@ -358,7 +358,7 @@ def render_task(task):
         unsafe_allow_html=True,
     )
 
-    with st.expander("✏️ 修改任務／回報進度"):
+    with st.expander("✏️ 修改任務／回報進度", expanded=False):
         current_category = str(task.get("category") or "待辦事項")
         category_options = list(dict.fromkeys(STATUS_ORDER + st.session_state.get("categories", [])))
         current_people = list(dict.fromkeys(partner_names + assignees))
@@ -501,7 +501,7 @@ def render_task(task):
 
         history = task.get("history") or []
         if history:
-            with st.expander("📜 活動紀錄"):
+            with st.expander("📜 活動紀錄", expanded=False):
                 for item in reversed(history[-20:]):
                     st.caption(str(item))
 

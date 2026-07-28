@@ -350,7 +350,7 @@ if st.session_state.get("show_developer_panel", False):
                     ]
                     st.dataframe(department_counts, width="stretch", hide_index=True)
 
-                with st.expander("➕ 新增或調整人員", expanded=not users):
+                with st.expander("➕ 新增或調整人員", expanded=False):
                     with st.form("developer_user_editor"):
                         name = st.text_input("姓名")
                         account = st.text_input("帳號（既有帳號會更新資料）")
@@ -376,7 +376,7 @@ if st.session_state.get("show_developer_panel", False):
                                     st.success("人員已新增。" if result == "created" else "人員資料與權限已更新。")
                                     st.rerun()
 
-                with st.expander("🗑️ 刪除人員"):
+                with st.expander("🗑️ 刪除人員", expanded=False):
                     deletable = {f"{u.get('name')}（{u.get('account')}）": u.get("account") for u in manageable_users}
                     if deletable:
                         target_label = st.selectbox("選擇人員", list(deletable.keys()))

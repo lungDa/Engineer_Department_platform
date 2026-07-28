@@ -361,7 +361,7 @@ for department in DEPARTMENTS:
             or any(key in str(item.get("role", "")).lower() for item in UserService.get_assignments(user))
         ]
 
-    with st.expander(f"🏢 {department}　｜　{len(users)} 人", expanded=department == st.session_state.current_department):
+    with st.expander(f"🏢 {department}　｜　{len(users)} 人", expanded=False):
         rows = [
             {
                 "課別": department,
