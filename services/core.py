@@ -723,15 +723,15 @@ class TaskService:
     WORKSHEET_NAME = "Tasks"
     COLUMNS = [
         "id", "title", "category", "due", "assignees", "status", "progress", "hours_spent",
-        "department", "importance", "urgency", "tags", "notes", "depends_on", "history", "created_by", "created_account", "created_at", "updated_at",
+        "department", "importance", "urgency", "tags", "notes", "depends_on", "checklist", "history", "created_by", "created_account", "created_at", "updated_at",
     ]
 
     @staticmethod
     def default_tasks():
         now = now_text()
         return [
-            {"id": 1, "title": "資料庫設計", "category": "進行中", "due": date.today() + timedelta(days=2), "assignees": ["王大明"], "status": "Active", "progress": 80, "hours_spent": 4.5, "importance": "高", "urgency": "高", "tags": "設計", "notes": "範例：所有任務會寫入本工作表", "depends_on": [], "history": [], "created_by": "系統", "created_account": "system", "created_at": now, "updated_at": now},
-            {"id": 2, "title": "API 開發", "category": "待辦事項", "due": date.today() + timedelta(days=5), "assignees": ["陳小華"], "status": "Active", "progress": 0, "hours_spent": 0.0, "importance": "高", "urgency": "低", "tags": "開發", "notes": "", "depends_on": [], "history": [], "created_by": "系統", "created_account": "system", "created_at": now, "updated_at": now},
+            {"id": 1, "title": "資料庫設計", "category": "進行中", "due": date.today() + timedelta(days=2), "assignees": ["王大明"], "status": "Active", "progress": 80, "hours_spent": 4.5, "importance": "高", "urgency": "高", "tags": "設計", "notes": "範例：所有任務會寫入本工作表", "depends_on": [], "checklist": [], "history": [], "created_by": "系統", "created_account": "system", "created_at": now, "updated_at": now},
+            {"id": 2, "title": "API 開發", "category": "待辦事項", "due": date.today() + timedelta(days=5), "assignees": ["陳小華"], "status": "Active", "progress": 0, "hours_spent": 0.0, "importance": "高", "urgency": "低", "tags": "開發", "notes": "", "depends_on": [], "checklist": [], "history": [], "created_by": "系統", "created_account": "system", "created_at": now, "updated_at": now},
         ]
 
     @staticmethod
@@ -741,8 +741,11 @@ class TaskService:
         row["due"] = parse_date(row.get("due"), date.today())
         row["assignees"] = parse_json_list(row.get("assignees"))
         row["depends_on"] = [parse_int(x, 0) for x in parse_json_list(row.get("depends_on"))]
+        from services.task_checklist import checklist_progress, normalize_checklist
+        row["checklist"] = normalize_checklist(parse_json_list(row.get("checklist")))
         row["history"] = parse_json_list(row.get("history"))
         row["progress"] = parse_int(row.get("progress"), 0)
+        row["progress"] = checklist_progress(row["checklist"], row["progress"])
         row["hours_spent"] = parse_float(row.get("hours_spent"), 0.0)
         row["status"] = row.get("status") or "Active"
         row["category"] = row.get("category") or "待辦事項"
@@ -756,6 +759,10 @@ class TaskService:
         row["due"] = parse_date(row.get("due"), date.today()).strftime("%Y-%m-%d")
         row["assignees"] = json.dumps(row.get("assignees", []), ensure_ascii=False)
         row["depends_on"] = json.dumps(row.get("depends_on", []), ensure_ascii=False)
+        from services.task_checklist import checklist_progress, normalize_checklist
+        row["checklist"] = normalize_checklist(row.get("checklist"))
+        row["progress"] = checklist_progress(row["checklist"], row.get("progress", 0))
+        row["checklist"] = json.dumps(row["checklist"], ensure_ascii=False)
         row["history"] = json.dumps(row.get("history", []), ensure_ascii=False)
         row["updated_at"] = row.get("updated_at") or now_text()
         return {col: row.get(col, "") for col in TaskService.COLUMNS}

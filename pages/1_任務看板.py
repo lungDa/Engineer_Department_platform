@@ -17,6 +17,11 @@ from utils import (
     parse_int,
 )
 from services.notification_service import notification_service
+from services.task_checklist import (
+    checklist_progress,
+    create_checklist_item,
+    normalize_checklist,
+)
 
 
 st.set_page_config(page_title="任務看板｜Enterprise V6", layout="wide")
@@ -42,7 +47,7 @@ def clean_list(value):
 
 
 def task_progress(task):
-    return max(0, min(100, parse_int(task.get("progress", 0), 0)))
+    return checklist_progress(task.get("checklist"), parse_int(task.get("progress", 0), 0))
 
 
 def task_due(task):
@@ -198,6 +203,11 @@ with st.expander("➕ 新增任務", expanded=False):
         with p3:
             estimated_tags = st.text_input("標籤", placeholder="設計, 採購, 現場")
         notes = st.text_area("任務說明／備註")
+        initial_checklist = st.text_area(
+            "初始子項目（選填，每行一項）",
+            placeholder="IO List 確認\n電氣圖繪製\nPLC 程式\nFAT 測試",
+            help="建立後可再為每個子項目設定負責人與期限。",
+        )
         notify_channels = st.multiselect(
             "建立後通知管道",
             ["Teams", "Outlook", "LINE"],
@@ -229,7 +239,19 @@ with st.expander("➕ 新增任務", expanded=False):
                         ),
                         "importance": importance, "urgency": urgency,
                         "tags": ",".join(clean_list(estimated_tags)), "notes": notes.strip(),
-                        "depends_on": [], "history": [f"[{datetime.now().strftime('%m-%d %H:%M')}] {creator_name} 建立任務"],
+                        "depends_on": [],
+                        "checklist": [
+                            {
+                                "id": index,
+                                "title": line.strip(),
+                                "completed": False,
+                                "assignee": "",
+                                "due": "",
+                            }
+                            for index, line in enumerate(initial_checklist.splitlines(), start=1)
+                            if line.strip()
+                        ],
+                        "history": [f"[{datetime.now().strftime('%m-%d %H:%M')}] {creator_name} 建立任務"],
                     }
                     try:
                         created_task = TaskService.add_task(new_task, author=creator_name, account=creator.get("account", creator_account))
@@ -340,6 +362,12 @@ def render_task(task):
     title = html.escape(str(task.get("title") or "未命名任務"))
     due_text = task_due(task).strftime("%Y-%m-%d")
     task_id = parse_int(task.get("id"), 0)
+    checklist = normalize_checklist(task.get("checklist"))
+    completed_items = sum(item["completed"] for item in checklist)
+    checklist_summary = (
+        f'<div class="task-meta">☑️ 子項目 {completed_items}/{len(checklist)}</div>'
+        if checklist else ""
+    )
 
     st.markdown(
         f"""
@@ -352,11 +380,107 @@ def render_task(task):
           <span class="chip">緊急：{html.escape(str(task.get('urgency', '低')))}</span>
           <div class="progress-bg"><div class="progress-fg" style="width:{progress}%"></div></div>
           <div class="task-meta">進度 {progress}%</div>
+          {checklist_summary}
           <div>{tag_chips}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+    with st.expander(f"☑️ 子項目 Checklist｜{completed_items}/{len(checklist)}", expanded=False):
+        if checklist:
+            with st.form(f"checklist_update_{task_id}"):
+                auth1, auth2 = st.columns(2)
+                with auth1:
+                    checklist_account = st.text_input("操作人工號", key=f"checklist_account_{task_id}")
+                with auth2:
+                    checklist_password = st.text_input(
+                        "操作人密碼", type="password", key=f"checklist_password_{task_id}"
+                    )
+
+                updated_checklist = []
+                delete_ids = []
+                for item in checklist:
+                    item_id = int(item["id"])
+                    done_col, title_col, owner_col, due_col, delete_col = st.columns([0.55, 2.5, 1.2, 1.2, 0.65])
+                    with done_col:
+                        completed = st.checkbox("完成", value=item["completed"], key=f"check_done_{task_id}_{item_id}")
+                    with title_col:
+                        item_title = st.text_input("子項目", value=item["title"], key=f"check_title_{task_id}_{item_id}")
+                    with owner_col:
+                        owner_options = [""] + list(dict.fromkeys(partner_names + [item["assignee"]]))
+                        assignee = st.selectbox(
+                            "負責人", owner_options,
+                            index=owner_options.index(item["assignee"]) if item["assignee"] in owner_options else 0,
+                            key=f"check_owner_{task_id}_{item_id}",
+                        )
+                    with due_col:
+                        due_value = parse_date(item["due"], task_due(task))
+                        item_due = st.date_input("期限", due_value, key=f"check_due_{task_id}_{item_id}")
+                    with delete_col:
+                        remove = st.checkbox("刪除", key=f"check_delete_{task_id}_{item_id}")
+                    if remove:
+                        delete_ids.append(item_id)
+                    elif item_title.strip():
+                        updated_checklist.append({
+                            "id": item_id,
+                            "title": item_title.strip(),
+                            "completed": completed,
+                            "assignee": assignee,
+                            "due": item_due.strftime("%Y-%m-%d"),
+                        })
+
+                save_checklist = st.form_submit_button("儲存子項目", width="stretch")
+
+            if save_checklist:
+                try:
+                    editor_name = persist_task(
+                        task,
+                        {"checklist": updated_checklist},
+                        checklist_account,
+                        checklist_password,
+                    )
+                    st.success(f"子項目已更新。操作人：{editor_name}")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"子項目更新失敗：{exc}")
+        else:
+            st.caption("目前尚未建立子項目。")
+
+        with st.form(f"checklist_add_{task_id}", clear_on_submit=True):
+            st.markdown("##### 新增子項目")
+            add_auth1, add_auth2 = st.columns(2)
+            with add_auth1:
+                add_account = st.text_input("新增人工號", key=f"check_add_account_{task_id}")
+            with add_auth2:
+                add_password = st.text_input("新增人密碼", type="password", key=f"check_add_password_{task_id}")
+            add1, add2, add3 = st.columns([2.4, 1.2, 1.2])
+            with add1:
+                new_item_title = st.text_input("子項目名稱", key=f"check_add_title_{task_id}")
+            with add2:
+                new_item_assignee = st.selectbox("負責人", [""] + partner_names, key=f"check_add_owner_{task_id}")
+            with add3:
+                new_item_due = st.date_input("期限", task_due(task), key=f"check_add_due_{task_id}")
+            add_submitted = st.form_submit_button("新增子項目", width="stretch")
+
+        if add_submitted:
+            if not new_item_title.strip():
+                st.error("請輸入子項目名稱。")
+            else:
+                try:
+                    new_checklist = checklist + [
+                        create_checklist_item(checklist, new_item_title, new_item_assignee, new_item_due)
+                    ]
+                    editor_name = persist_task(
+                        task,
+                        {"checklist": new_checklist},
+                        add_account,
+                        add_password,
+                    )
+                    st.success(f"子項目已新增。操作人：{editor_name}")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"子項目新增失敗：{exc}")
 
     with st.expander("✏️ 修改任務／回報進度", expanded=False):
         current_category = str(task.get("category") or "待辦事項")
