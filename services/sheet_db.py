@@ -91,6 +91,7 @@ class SheetDB:
         # 動態業務資料依需求每 5 秒允許重新同步 Google Sheet。
         "Tasks": 5,
         "TaskActivity": 5,
+        "TaskAttachments": 5,
         "Announcements": 5,
         "Meetings": 5,
         "Approvals": 5,

@@ -23,6 +23,8 @@ class TaskActivityService:
         "updated": "修改任務",
         "checklist_updated": "更新子項目",
         "commented": "新增留言",
+        "attachment_uploaded": "上傳附件",
+        "attachment_deleted": "刪除附件",
         "deleted": "刪除任務",
     }
 

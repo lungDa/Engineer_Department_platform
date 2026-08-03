@@ -23,6 +23,7 @@ from services.task_checklist import (
     normalize_checklist,
 )
 from services.task_activity import TaskActivityService
+from services.task_attachment import TaskAttachmentService
 
 
 st.set_page_config(page_title="任務看板｜Enterprise V6", layout="wide")
@@ -482,6 +483,99 @@ def render_task(task):
                     st.rerun()
                 except Exception as exc:
                     st.error(f"子項目新增失敗：{exc}")
+
+    attachments = TaskAttachmentService.load_for_task(task_id)
+    with st.expander(f"📎 任務附件｜{len(attachments)}", expanded=False):
+        with st.form(f"attachment_upload_{task_id}", clear_on_submit=True):
+            attachment_auth1, attachment_auth2 = st.columns(2)
+            with attachment_auth1:
+                attachment_account = st.text_input("上傳人工號", key=f"attachment_account_{task_id}")
+            with attachment_auth2:
+                attachment_password = st.text_input(
+                    "上傳人密碼", type="password", key=f"attachment_password_{task_id}"
+                )
+            uploaded_attachment = st.file_uploader(
+                "選擇附件（單檔上限 20 MB）",
+                type=["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "zip", "jpg", "jpeg", "png", "webp", "dwg", "dxf"],
+                key=f"task_attachment_file_{task_id}",
+            )
+            upload_submitted = st.form_submit_button("上傳附件", width="stretch")
+
+        if upload_submitted:
+            ok, message, uploader = UserService.authenticate(attachment_account, attachment_password)
+            if not ok:
+                st.error(message)
+            elif uploaded_attachment is None:
+                st.error("請先選擇附件。")
+            else:
+                try:
+                    uploader_name = uploader.get("name") or uploader.get("account") or attachment_account
+                    TaskAttachmentService.upload(
+                        task_id, uploaded_attachment, uploader_name,
+                        uploader.get("account", attachment_account),
+                    )
+                    st.success("附件已上傳。")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"附件上傳失敗：{exc}")
+
+        if not attachments:
+            st.caption("目前尚無附件。")
+        for attachment in attachments:
+            attachment_id = parse_int(attachment.get("id"), 0)
+            file_name = str(attachment.get("file_name") or "附件")
+            meta_col, download_col = st.columns([4, 1])
+            with meta_col:
+                st.markdown(f"📄 **{html.escape(file_name)}**")
+                st.caption(
+                    f"{TaskAttachmentService.format_size(attachment.get('size_bytes'))} · "
+                    f"{attachment.get('uploaded_by', '')} · {attachment.get('created_at', '')}"
+                )
+            with download_col:
+                download_key = f"attachment_bytes_{task_id}_{attachment_id}"
+                if st.button("準備下載", key=f"prepare_attachment_{task_id}_{attachment_id}", width="stretch"):
+                    try:
+                        st.session_state[download_key] = TaskAttachmentService.download(attachment)
+                    except Exception as exc:
+                        st.error(f"附件讀取失敗：{exc}")
+                if download_key in st.session_state:
+                    st.download_button(
+                        "下載", data=st.session_state[download_key], file_name=file_name,
+                        mime=str(attachment.get("mime_type") or "application/octet-stream"),
+                        key=f"download_attachment_{task_id}_{attachment_id}", width="stretch",
+                    )
+
+            with st.form(f"attachment_delete_{task_id}_{attachment_id}"):
+                delete_attachment1, delete_attachment2, delete_attachment3 = st.columns([1.4, 1.4, 1])
+                with delete_attachment1:
+                    attachment_deleter_account = st.text_input(
+                        "刪除人工號", key=f"attachment_deleter_account_{task_id}_{attachment_id}"
+                    )
+                with delete_attachment2:
+                    attachment_deleter_password = st.text_input(
+                        "刪除人密碼", type="password",
+                        key=f"attachment_deleter_password_{task_id}_{attachment_id}",
+                    )
+                with delete_attachment3:
+                    delete_attachment_submitted = st.form_submit_button("刪除附件", width="stretch")
+            if delete_attachment_submitted:
+                ok, message, deleter = UserService.authenticate(
+                    attachment_deleter_account, attachment_deleter_password
+                )
+                if not ok:
+                    st.error(message)
+                else:
+                    try:
+                        deleter_name = deleter.get("name") or deleter.get("account") or attachment_deleter_account
+                        TaskAttachmentService.delete(
+                            attachment_id, task_id, deleter_name,
+                            deleter.get("account", attachment_deleter_account),
+                        )
+                        st.success("附件已刪除並移至垃圾桶。")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"附件刪除失敗：{exc}")
+            st.divider()
 
     with st.expander("✏️ 修改任務／回報進度", expanded=False):
         current_category = str(task.get("category") or "待辦事項")
