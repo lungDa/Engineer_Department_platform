@@ -4,10 +4,12 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from config.功能開關 import 要求功能開啟
 
 from utils import AppInitializer, parse_date, parse_int
 
 st.set_page_config(page_title="專案甘特圖", layout="wide")
+要求功能開啟("專案甘特圖")
 st.header("📊 專案甘特圖｜Enterprise Gantt Center V8.1")
 st.caption("Dark Enterprise Dashboard｜KPI 已改用 Streamlit 原生 Metric Card，避免 HTML 外露")
 

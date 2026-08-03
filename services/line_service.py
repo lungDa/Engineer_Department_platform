@@ -9,6 +9,7 @@ import requests
 from config.settings import get_runtime_secret
 from services.base_service import BaseService
 from shared.response import failed, success
+from config.功能開關 import 功能已開啟
 
 
 class LineService(BaseService):
@@ -27,7 +28,7 @@ class LineService(BaseService):
         return get_runtime_secret(name, default).strip()
 
     def is_configured(self) -> bool:
-        return bool(
+        return 功能已開啟("LINE通知") and bool(
             self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN")
             or (
                 self._relay_url()
@@ -81,6 +82,8 @@ class LineService(BaseService):
         return hmac.compare_digest(expected, signature)
 
     def reply_text(self, reply_token: str, text: str) -> dict:
+        if not 功能已開啟("LINE智慧助理"):
+            return failed("LINE 智慧助理功能目前已關閉。")
         if not self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN"):
             return failed("LINE 回覆需要在執行環境設定 Channel Access Token。")
         if not reply_token:
@@ -95,6 +98,8 @@ class LineService(BaseService):
         )
 
     def push_text(self, user_id: str, text: str) -> dict:
+        if not 功能已開啟("LINE通知"):
+            return failed("LINE 通知功能目前已關閉。")
         if not self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN"):
             self.logger.error(
                 "LINE push skipped: LINE_CHANNEL_ACCESS_TOKEN is missing in this runtime."
@@ -212,6 +217,8 @@ class LineService(BaseService):
             return failed(f"Render LINE 通知連線失敗：{exc}")
 
     def broadcast_text(self, text: str) -> dict:
+        if not 功能已開啟("LINE通知"):
+            return failed("LINE 通知功能目前已關閉。")
         if self._runtime_secret("LINE_CHANNEL_ACCESS_TOKEN"):
             return self._broadcast_direct(text)
         return self._broadcast_via_render(text)

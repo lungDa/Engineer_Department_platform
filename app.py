@@ -1,5 +1,7 @@
 import streamlit as st
 
+from config.功能開關 import 功能已開啟, 要求功能開啟
+
 from services.diagnostics_service import DiagnosticsService
 from services.mail_service import mail_service
 from services.teams_service import teams_service
@@ -8,6 +10,7 @@ from config.departments import DEPARTMENTS
 from config.roles import ROLE_LEVELS
 
 st.set_page_config(page_title="鋒霈_工程一部 管理平台", layout="wide")
+要求功能開啟("首頁")
 
 AppInitializer.setup(load_tasks=False, load_meetings=False, load_approvals=False)
 ViewComponents.render_public_sidebar()
@@ -17,7 +20,7 @@ with title_col:
     st.title("🚀 歡迎使用 工程一部_管理平台")
 with dev_col:
     st.write("")
-    if st.button("🛠️ 開發者", width="stretch"):
+    if 功能已開啟("開發者功能") and st.button("🛠️ 開發者", width="stretch"):
         st.session_state["show_developer_panel"] = not st.session_state.get("show_developer_panel", False)
 
 st.write("---")
@@ -282,7 +285,7 @@ def render_enterprise_diagnostics():
         st.json(report)
 
 
-if st.session_state.get("show_developer_panel", False):
+if 功能已開啟("開發者功能") and st.session_state.get("show_developer_panel", False):
     with st.container(border=True):
         st.markdown("#### 🛠️ 開發者工具")
         if not st.session_state.get("developer_diagnostics_unlocked", False):
@@ -390,12 +393,15 @@ if st.session_state.get("show_developer_panel", False):
                         st.info("沒有可刪除的人員。")
 
             with diagnostics_tab:
-                if st.session_state.get("developer_diagnostics_unlocked", False):
+                if not 功能已開啟("系統診斷"):
+                    st.info("系統診斷功能目前已關閉。")
+                elif st.session_state.get("developer_diagnostics_unlocked", False):
                     render_enterprise_diagnostics()
                 else:
                     st.warning("系統診斷與其他開發者功能僅限開發者（權限 9）使用。")
 
-ViewComponents.render_announcement_board()
+if 功能已開啟("布告欄"):
+    ViewComponents.render_announcement_board()
 
 st.write("---")
 st.subheader("系統狀態概覽")

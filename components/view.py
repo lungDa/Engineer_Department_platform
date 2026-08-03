@@ -3,6 +3,8 @@ from datetime import date, datetime, timedelta
 
 import streamlit as st
 
+from config.功能開關 import 功能已開啟
+
 from services.sheet_db import SheetDB, SheetDiagnostics
 from services.teams_service import teams_service
 from services.core import (
@@ -129,7 +131,8 @@ class ViewComponents:
                 with st.expander("Google Sheet 連線訊息", expanded=False):
                     st.code(str(sheet_status.get("error")), language="text")
 
-        with st.expander("📣 發布公告（所有啟用人員皆可發布）", expanded=False):
+        if 功能已開啟("公告發布"):
+          with st.expander("📣 發布公告（所有啟用人員皆可發布）", expanded=False):
             with st.form("enterprise_announcement_form", clear_on_submit=True):
                 c0a, c0b = st.columns(2)
                 with c0a:

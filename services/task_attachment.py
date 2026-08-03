@@ -15,6 +15,7 @@ from google.oauth2.service_account import Credentials
 
 from services.sheet_db import SheetDB
 from services.task_activity import TaskActivityService
+from config.功能開關 import 功能已開啟
 
 
 class TaskAttachmentService:
@@ -88,6 +89,8 @@ class TaskAttachmentService:
 
     @classmethod
     def upload(cls, task_id: Any, uploaded_file, actor: str, account: str) -> dict[str, Any]:
+        if not 功能已開啟("任務附件"):
+            raise RuntimeError("任務附件功能目前已關閉。")
         name, data, mime_type = cls.validate_file(uploaded_file)
         metadata = {
             "name": f"task-{int(float(task_id))}-{uuid.uuid4().hex[:8]}-{name}",
@@ -142,6 +145,8 @@ class TaskAttachmentService:
 
     @classmethod
     def download(cls, attachment: dict[str, Any]) -> bytes:
+        if not 功能已開啟("任務附件"):
+            raise RuntimeError("任務附件功能目前已關閉。")
         file_id = str(attachment.get("drive_file_id") or "").strip()
         if not file_id:
             raise ValueError("附件缺少 Drive 檔案 ID。")
@@ -152,6 +157,8 @@ class TaskAttachmentService:
 
     @classmethod
     def delete(cls, attachment_id: Any, task_id: Any, actor: str, account: str) -> None:
+        if not 功能已開啟("任務附件"):
+            raise RuntimeError("任務附件功能目前已關閉。")
         rows = SheetDB.load(cls.WORKSHEET_NAME, cls.COLUMNS, []) or []
         target = int(float(attachment_id or 0))
         selected = None

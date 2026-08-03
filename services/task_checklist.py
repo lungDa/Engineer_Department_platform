@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+from config.功能開關 import 功能已開啟
+
 
 def normalize_checklist(value: Any) -> list[dict[str, Any]]:
     """Return a stable, JSON-serializable checklist structure."""
@@ -68,6 +70,8 @@ def create_checklist_item(
     assignee: str = "",
     due: date | str | None = None,
 ) -> dict[str, Any]:
+    if not 功能已開啟("任務子項目"):
+        raise RuntimeError("任務子項目功能目前已關閉。")
     due_text = due.strftime("%Y-%m-%d") if isinstance(due, date) else str(due or "").strip()
     return {
         "id": next_checklist_id(checklist),

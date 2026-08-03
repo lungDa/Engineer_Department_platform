@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 import pandas as pd
 import streamlit as st
+from config.功能開關 import 要求功能開啟
 from utils import AppInitializer
 
 
@@ -29,6 +30,7 @@ st.set_page_config(
     page_icon="🔲",
     layout="wide",
 )
+要求功能開啟("艾森豪矩陣")
 
 AppInitializer.setup()
 

@@ -1,4 +1,5 @@
 import streamlit as st
+from config.功能開關 import 功能已開啟, 要求功能開啟
 import calendar
 from io import BytesIO
 from datetime import date
@@ -7,6 +8,7 @@ import pandas as pd
 
 from utils import AppInitializer, ApprovalService, MeetingService, TaskService, ViewComponents
 
+要求功能開啟("行事曆")
 AppInitializer.setup(load_tasks=True, load_meetings=True, load_approvals=True)
 st.header("📅 行事曆")
 
@@ -215,6 +217,7 @@ with export_col1:
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
         key=f"calendar_export_xlsx_{schedule_type}",
+        disabled=not 功能已開啟("行事曆匯出"),
     )
 with export_col2:
     st.download_button(
@@ -224,6 +227,7 @@ with export_col2:
         mime="text/csv",
         use_container_width=True,
         key=f"calendar_export_csv_{schedule_type}",
+        disabled=not 功能已開啟("行事曆匯出"),
     )
 with export_col3:
     st.caption(

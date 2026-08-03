@@ -3,9 +3,11 @@ from datetime import date
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from config.功能開關 import 要求功能開啟
 
 from utils import AppInitializer, TaskService
 
+要求功能開啟("效率統計分析")
 st.header("📈 效率統計分析")
 AppInitializer.setup(load_tasks=True, load_meetings=False, load_approvals=False)
 active = [t for t in st.session_state.tasks if t['status'] == 'Active']

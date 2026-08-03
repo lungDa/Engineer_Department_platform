@@ -7,6 +7,7 @@ from services.line_service import line_service
 from services.mail_service import mail_service
 from services.teams_service import teams_service
 from shared.response import success
+from config.功能開關 import 功能已開啟
 
 
 class NotificationService:
@@ -28,6 +29,19 @@ class NotificationService:
         return {"ok": True, "skipped": True, "message": message, "data": None}
 
     @staticmethod
+    def _enabled_channels(channels: Iterable[str]) -> set[str]:
+        requested = {str(channel).strip().lower() for channel in channels}
+        switches = {
+            "teams": "Teams通知",
+            "outlook": "Outlook通知",
+            "line": "LINE通知",
+        }
+        return {
+            channel for channel in requested
+            if channel not in switches or 功能已開啟(switches[channel])
+        }
+
+    @staticmethod
     def _m365_emails(contacts: Iterable[dict]) -> list[str]:
         return list(dict.fromkeys(
             str(user.get("m365_upn") or user.get("email") or "").strip()
@@ -43,7 +57,7 @@ class NotificationService:
         actor: str,
         channels: Iterable[str] = ("teams", "outlook", "line"),
     ) -> dict:
-        enabled = {str(channel).strip().lower() for channel in channels}
+        enabled = self._enabled_channels(channels)
         assignees = task.get("assignees") or []
         if isinstance(assignees, str):
             assignees = [item.strip() for item in assignees.replace("；", ",").split(",") if item.strip()]
@@ -141,7 +155,7 @@ class NotificationService:
         actor: str,
         channels: Iterable[str] = ("teams", "outlook", "line"),
     ) -> dict:
-        enabled = {str(channel).strip().lower() for channel in channels}
+        enabled = self._enabled_channels(channels)
         attendees = meeting.get("attendees") or []
         if isinstance(attendees, str):
             attendees = [
@@ -246,7 +260,7 @@ class NotificationService:
         channels: Iterable[str] = ("teams", "outlook", "line"),
     ) -> dict:
         """Notify the selected people after a leave or overtime request is saved."""
-        enabled = {str(channel).strip().lower() for channel in channels}
+        enabled = self._enabled_channels(channels)
         notified_users = approval.get("notified_users") or []
         if isinstance(notified_users, str):
             notified_users = [

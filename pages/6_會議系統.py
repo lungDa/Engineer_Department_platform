@@ -1,11 +1,13 @@
 from datetime import date
 
 import streamlit as st
+from config.功能開關 import 要求功能開啟
 
 from utils import MeetingService, UserService, current_department
 from utils import AppInitializer
 from services.notification_service import notification_service
 
+要求功能開啟("會議系統")
 AppInitializer.setup(load_tasks=False, load_meetings=True)
 
 st.header("📅 會議管理系統")

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import streamlit as st
+from config.功能開關 import 功能已開啟, 要求功能開啟
 
 from config.departments import DEPARTMENTS
 from config.roles import ROLE_LEVELS
@@ -16,6 +17,8 @@ from utils import AppInitializer, UserService, parse_int
 M365_WORKFLOW_FILE = "m365-sync.yml"
 M365_WORKFLOW_BRANCH = "main"
 TAIPEI_TIMEZONE = timezone(timedelta(hours=8))
+
+要求功能開啟("人員名單")
 
 
 def _github_settings() -> tuple[str, str, str]:
@@ -426,7 +429,11 @@ if management_unlocked:
             if st.button(
                 "🔄 與 M365 系統同步",
                 type="primary",
-                disabled=not confirm_m365_sync or sync_is_active,
+                disabled=(
+                    not 功能已開啟("Microsoft 365人員同步")
+                    or not confirm_m365_sync
+                    or sync_is_active
+                ),
                 key="trigger_m365_sync",
             ):
                 with st.spinner("正在啟動 Microsoft 365 人員同步，請勿重複點擊…"):

@@ -5,6 +5,7 @@ import requests
 from config.settings import get_settings
 from services.base_service import BaseService
 from shared.response import failed, success
+from config.功能開關 import 功能已開啟
 
 
 class MailService(BaseService):
@@ -13,7 +14,7 @@ class MailService(BaseService):
     service_name = "mail"
 
     def is_configured(self) -> bool:
-        return bool(get_settings().outlook_webhook_url.strip())
+        return 功能已開啟("Outlook通知") and bool(get_settings().outlook_webhook_url.strip())
 
     def get_status(self) -> dict:
         return {

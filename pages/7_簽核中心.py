@@ -1,10 +1,12 @@
 from datetime import date, datetime
 
 import streamlit as st
+from config.功能開關 import 要求功能開啟
 
 from utils import AppInitializer, ApprovalService, UserService
 from services.notification_service import notification_service
 
+要求功能開啟("簽核中心")
 
 AppInitializer.setup(load_tasks=False, load_approvals=True)
 

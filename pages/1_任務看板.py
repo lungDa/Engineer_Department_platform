@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
+from config.功能開關 import 要求功能開啟
 
 from utils import (
     AppInitializer,
@@ -27,6 +28,7 @@ from services.task_attachment import TaskAttachmentService
 
 
 st.set_page_config(page_title="任務看板｜Enterprise V6", layout="wide")
+要求功能開啟("任務看板")
 AppInitializer.setup(load_tasks=True, load_meetings=False, load_approvals=False)
 
 STATUS_ORDER = ["待辦事項", "進行中", "已完成"]

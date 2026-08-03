@@ -6,6 +6,7 @@ import requests
 from config.settings import get_settings
 from services.base_service import BaseService
 from shared.response import failed, success
+from config.功能開關 import 功能已開啟
 
 
 class TeamsService(BaseService):
@@ -18,11 +19,11 @@ class TeamsService(BaseService):
     )
 
     def is_configured(self) -> bool:
-        return bool(get_settings().teams_webhook_url.strip())
+        return 功能已開啟("Teams通知") and bool(get_settings().teams_webhook_url.strip())
 
     def is_bulletin_configured(self) -> bool:
         """Return whether the bulletin-only Teams webhook is configured."""
-        return bool(get_settings().bulletin_webhook_url.strip())
+        return 功能已開啟("Teams通知") and bool(get_settings().bulletin_webhook_url.strip())
 
     def get_status(self) -> dict:
         return {

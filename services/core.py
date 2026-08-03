@@ -110,7 +110,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V5.6.2 Task Comments and Audit Trail"
+    VERSION = "V5.6.4 集中式功能開關"
 
     @staticmethod
     def load_enterprise_theme():
@@ -141,6 +141,8 @@ class AppInitializer:
         """
         st.session_state.setdefault("app_version", AppInitializer.VERSION)
         AppInitializer.load_enterprise_theme()
+        from config.功能開關 import 隱藏已關閉頁面
+        隱藏已關閉頁面()
         st.session_state.setdefault("user_records_fallback", UserService.default_users())
         st.session_state.setdefault("announcements_fallback", [])
         st.session_state.setdefault("tasks_fallback", TaskService.default_tasks())

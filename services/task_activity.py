@@ -7,6 +7,7 @@ from typing import Any
 import streamlit as st
 
 from services.sheet_db import SheetDB
+from config.功能開關 import 功能已開啟
 
 
 class TaskActivityService:
@@ -102,6 +103,8 @@ class TaskActivityService:
 
     @classmethod
     def load_for_task(cls, task_id: Any) -> list[dict[str, Any]]:
+        if not 功能已開啟("任務留言與操作歷程"):
+            return []
         rows = SheetDB.load(cls.WORKSHEET_NAME, cls.COLUMNS, cls.default_rows())
         if rows is None:
             rows = st.session_state.get("task_activity_fallback", [])
@@ -111,6 +114,8 @@ class TaskActivityService:
 
     @classmethod
     def add_comment(cls, task_id: Any, actor: str, actor_account: str, comment: str) -> None:
+        if not 功能已開啟("任務留言與操作歷程"):
+            raise RuntimeError("任務留言與操作歷程功能目前已關閉。")
         content = str(comment or "").strip()
         if not content:
             raise ValueError("留言內容不可空白。")
