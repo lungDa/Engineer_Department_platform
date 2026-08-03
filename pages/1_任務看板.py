@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
-from config.功能開關 import 要求功能開啟
+from config.功能開關 import 功能已開啟, 要求功能開啟
 
 from utils import (
     AppInitializer,
@@ -51,6 +51,8 @@ def clean_list(value):
 
 
 def task_progress(task):
+    if not 功能已開啟("任務子項目"):
+        return parse_int(task.get("progress", 0), 0)
     return checklist_progress(task.get("checklist"), parse_int(task.get("progress", 0), 0))
 
 
@@ -391,193 +393,195 @@ def render_task(task):
         unsafe_allow_html=True,
     )
 
-    with st.expander(f"☑️ 子項目 Checklist｜{completed_items}/{len(checklist)}", expanded=False):
-        if checklist:
-            with st.form(f"checklist_update_{task_id}"):
-                auth1, auth2 = st.columns(2)
-                with auth1:
-                    checklist_account = st.text_input("操作人工號", key=f"checklist_account_{task_id}")
-                with auth2:
-                    checklist_password = st.text_input(
-                        "操作人密碼", type="password", key=f"checklist_password_{task_id}"
-                    )
-
-                updated_checklist = []
-                delete_ids = []
-                for item in checklist:
-                    item_id = int(item["id"])
-                    done_col, title_col, owner_col, due_col, delete_col = st.columns([0.55, 2.5, 1.2, 1.2, 0.65])
-                    with done_col:
-                        completed = st.checkbox("完成", value=item["completed"], key=f"check_done_{task_id}_{item_id}")
-                    with title_col:
-                        item_title = st.text_input("子項目", value=item["title"], key=f"check_title_{task_id}_{item_id}")
-                    with owner_col:
-                        owner_options = [""] + list(dict.fromkeys(partner_names + [item["assignee"]]))
-                        assignee = st.selectbox(
-                            "負責人", owner_options,
-                            index=owner_options.index(item["assignee"]) if item["assignee"] in owner_options else 0,
-                            key=f"check_owner_{task_id}_{item_id}",
+    if 功能已開啟("任務子項目"):
+        with st.expander(f"☑️ 子項目 Checklist｜{completed_items}/{len(checklist)}", expanded=False):
+            if checklist:
+                with st.form(f"checklist_update_{task_id}"):
+                    auth1, auth2 = st.columns(2)
+                    with auth1:
+                        checklist_account = st.text_input("操作人工號", key=f"checklist_account_{task_id}")
+                    with auth2:
+                        checklist_password = st.text_input(
+                            "操作人密碼", type="password", key=f"checklist_password_{task_id}"
                         )
-                    with due_col:
-                        due_value = parse_date(item["due"], task_due(task))
-                        item_due = st.date_input("期限", due_value, key=f"check_due_{task_id}_{item_id}")
-                    with delete_col:
-                        remove = st.checkbox("刪除", key=f"check_delete_{task_id}_{item_id}")
-                    if remove:
-                        delete_ids.append(item_id)
-                    elif item_title.strip():
-                        updated_checklist.append({
-                            "id": item_id,
-                            "title": item_title.strip(),
-                            "completed": completed,
-                            "assignee": assignee,
-                            "due": item_due.strftime("%Y-%m-%d"),
-                        })
 
-                save_checklist = st.form_submit_button("儲存子項目", width="stretch")
+                    updated_checklist = []
+                    delete_ids = []
+                    for item in checklist:
+                        item_id = int(item["id"])
+                        done_col, title_col, owner_col, due_col, delete_col = st.columns([0.55, 2.5, 1.2, 1.2, 0.65])
+                        with done_col:
+                            completed = st.checkbox("完成", value=item["completed"], key=f"check_done_{task_id}_{item_id}")
+                        with title_col:
+                            item_title = st.text_input("子項目", value=item["title"], key=f"check_title_{task_id}_{item_id}")
+                        with owner_col:
+                            owner_options = [""] + list(dict.fromkeys(partner_names + [item["assignee"]]))
+                            assignee = st.selectbox(
+                                "負責人", owner_options,
+                                index=owner_options.index(item["assignee"]) if item["assignee"] in owner_options else 0,
+                                key=f"check_owner_{task_id}_{item_id}",
+                            )
+                        with due_col:
+                            due_value = parse_date(item["due"], task_due(task))
+                            item_due = st.date_input("期限", due_value, key=f"check_due_{task_id}_{item_id}")
+                        with delete_col:
+                            remove = st.checkbox("刪除", key=f"check_delete_{task_id}_{item_id}")
+                        if remove:
+                            delete_ids.append(item_id)
+                        elif item_title.strip():
+                            updated_checklist.append({
+                                "id": item_id,
+                                "title": item_title.strip(),
+                                "completed": completed,
+                                "assignee": assignee,
+                                "due": item_due.strftime("%Y-%m-%d"),
+                            })
 
-            if save_checklist:
-                try:
-                    editor_name = persist_task(
-                        task,
-                        {"checklist": updated_checklist},
-                        checklist_account,
-                        checklist_password,
-                    )
-                    st.success(f"子項目已更新。操作人：{editor_name}")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"子項目更新失敗：{exc}")
-        else:
-            st.caption("目前尚未建立子項目。")
+                    save_checklist = st.form_submit_button("儲存子項目", width="stretch")
 
-        with st.form(f"checklist_add_{task_id}", clear_on_submit=True):
-            st.markdown("##### 新增子項目")
-            add_auth1, add_auth2 = st.columns(2)
-            with add_auth1:
-                add_account = st.text_input("新增人工號", key=f"check_add_account_{task_id}")
-            with add_auth2:
-                add_password = st.text_input("新增人密碼", type="password", key=f"check_add_password_{task_id}")
-            add1, add2, add3 = st.columns([2.4, 1.2, 1.2])
-            with add1:
-                new_item_title = st.text_input("子項目名稱", key=f"check_add_title_{task_id}")
-            with add2:
-                new_item_assignee = st.selectbox("負責人", [""] + partner_names, key=f"check_add_owner_{task_id}")
-            with add3:
-                new_item_due = st.date_input("期限", task_due(task), key=f"check_add_due_{task_id}")
-            add_submitted = st.form_submit_button("新增子項目", width="stretch")
-
-        if add_submitted:
-            if not new_item_title.strip():
-                st.error("請輸入子項目名稱。")
-            else:
-                try:
-                    new_checklist = checklist + [
-                        create_checklist_item(checklist, new_item_title, new_item_assignee, new_item_due)
-                    ]
-                    editor_name = persist_task(
-                        task,
-                        {"checklist": new_checklist},
-                        add_account,
-                        add_password,
-                    )
-                    st.success(f"子項目已新增。操作人：{editor_name}")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"子項目新增失敗：{exc}")
-
-    attachments = TaskAttachmentService.load_for_task(task_id)
-    with st.expander(f"📎 任務附件｜{len(attachments)}", expanded=False):
-        with st.form(f"attachment_upload_{task_id}", clear_on_submit=True):
-            attachment_auth1, attachment_auth2 = st.columns(2)
-            with attachment_auth1:
-                attachment_account = st.text_input("上傳人工號", key=f"attachment_account_{task_id}")
-            with attachment_auth2:
-                attachment_password = st.text_input(
-                    "上傳人密碼", type="password", key=f"attachment_password_{task_id}"
-                )
-            uploaded_attachment = st.file_uploader(
-                "選擇附件（單檔上限 20 MB）",
-                type=["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "zip", "jpg", "jpeg", "png", "webp", "dwg", "dxf"],
-                key=f"task_attachment_file_{task_id}",
-            )
-            upload_submitted = st.form_submit_button("上傳附件", width="stretch")
-
-        if upload_submitted:
-            ok, message, uploader = UserService.authenticate(attachment_account, attachment_password)
-            if not ok:
-                st.error(message)
-            elif uploaded_attachment is None:
-                st.error("請先選擇附件。")
-            else:
-                try:
-                    uploader_name = uploader.get("name") or uploader.get("account") or attachment_account
-                    TaskAttachmentService.upload(
-                        task_id, uploaded_attachment, uploader_name,
-                        uploader.get("account", attachment_account),
-                    )
-                    st.success("附件已上傳。")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"附件上傳失敗：{exc}")
-
-        if not attachments:
-            st.caption("目前尚無附件。")
-        for attachment in attachments:
-            attachment_id = parse_int(attachment.get("id"), 0)
-            file_name = str(attachment.get("file_name") or "附件")
-            meta_col, download_col = st.columns([4, 1])
-            with meta_col:
-                st.markdown(f"📄 **{html.escape(file_name)}**")
-                st.caption(
-                    f"{TaskAttachmentService.format_size(attachment.get('size_bytes'))} · "
-                    f"{attachment.get('uploaded_by', '')} · {attachment.get('created_at', '')}"
-                )
-            with download_col:
-                download_key = f"attachment_bytes_{task_id}_{attachment_id}"
-                if st.button("準備下載", key=f"prepare_attachment_{task_id}_{attachment_id}", width="stretch"):
+                if save_checklist:
                     try:
-                        st.session_state[download_key] = TaskAttachmentService.download(attachment)
-                    except Exception as exc:
-                        st.error(f"附件讀取失敗：{exc}")
-                if download_key in st.session_state:
-                    st.download_button(
-                        "下載", data=st.session_state[download_key], file_name=file_name,
-                        mime=str(attachment.get("mime_type") or "application/octet-stream"),
-                        key=f"download_attachment_{task_id}_{attachment_id}", width="stretch",
-                    )
-
-            with st.form(f"attachment_delete_{task_id}_{attachment_id}"):
-                delete_attachment1, delete_attachment2, delete_attachment3 = st.columns([1.4, 1.4, 1])
-                with delete_attachment1:
-                    attachment_deleter_account = st.text_input(
-                        "刪除人工號", key=f"attachment_deleter_account_{task_id}_{attachment_id}"
-                    )
-                with delete_attachment2:
-                    attachment_deleter_password = st.text_input(
-                        "刪除人密碼", type="password",
-                        key=f"attachment_deleter_password_{task_id}_{attachment_id}",
-                    )
-                with delete_attachment3:
-                    delete_attachment_submitted = st.form_submit_button("刪除附件", width="stretch")
-            if delete_attachment_submitted:
-                ok, message, deleter = UserService.authenticate(
-                    attachment_deleter_account, attachment_deleter_password
-                )
-                if not ok:
-                    st.error(message)
-                else:
-                    try:
-                        deleter_name = deleter.get("name") or deleter.get("account") or attachment_deleter_account
-                        TaskAttachmentService.delete(
-                            attachment_id, task_id, deleter_name,
-                            deleter.get("account", attachment_deleter_account),
+                        editor_name = persist_task(
+                            task,
+                            {"checklist": updated_checklist},
+                            checklist_account,
+                            checklist_password,
                         )
-                        st.success("附件已刪除並移至垃圾桶。")
+                        st.success(f"子項目已更新。操作人：{editor_name}")
                         st.rerun()
                     except Exception as exc:
-                        st.error(f"附件刪除失敗：{exc}")
-            st.divider()
+                        st.error(f"子項目更新失敗：{exc}")
+            else:
+                st.caption("目前尚未建立子項目。")
+
+            with st.form(f"checklist_add_{task_id}", clear_on_submit=True):
+                st.markdown("##### 新增子項目")
+                add_auth1, add_auth2 = st.columns(2)
+                with add_auth1:
+                    add_account = st.text_input("新增人工號", key=f"check_add_account_{task_id}")
+                with add_auth2:
+                    add_password = st.text_input("新增人密碼", type="password", key=f"check_add_password_{task_id}")
+                add1, add2, add3 = st.columns([2.4, 1.2, 1.2])
+                with add1:
+                    new_item_title = st.text_input("子項目名稱", key=f"check_add_title_{task_id}")
+                with add2:
+                    new_item_assignee = st.selectbox("負責人", [""] + partner_names, key=f"check_add_owner_{task_id}")
+                with add3:
+                    new_item_due = st.date_input("期限", task_due(task), key=f"check_add_due_{task_id}")
+                add_submitted = st.form_submit_button("新增子項目", width="stretch")
+
+            if add_submitted:
+                if not new_item_title.strip():
+                    st.error("請輸入子項目名稱。")
+                else:
+                    try:
+                        new_checklist = checklist + [
+                            create_checklist_item(checklist, new_item_title, new_item_assignee, new_item_due)
+                        ]
+                        editor_name = persist_task(
+                            task,
+                            {"checklist": new_checklist},
+                            add_account,
+                            add_password,
+                        )
+                        st.success(f"子項目已新增。操作人：{editor_name}")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"子項目新增失敗：{exc}")
+
+    if 功能已開啟("任務附件"):
+        attachments = TaskAttachmentService.load_for_task(task_id)
+        with st.expander(f"📎 任務附件｜{len(attachments)}", expanded=False):
+            with st.form(f"attachment_upload_{task_id}", clear_on_submit=True):
+                attachment_auth1, attachment_auth2 = st.columns(2)
+                with attachment_auth1:
+                    attachment_account = st.text_input("上傳人工號", key=f"attachment_account_{task_id}")
+                with attachment_auth2:
+                    attachment_password = st.text_input(
+                        "上傳人密碼", type="password", key=f"attachment_password_{task_id}"
+                    )
+                uploaded_attachment = st.file_uploader(
+                    "選擇附件（單檔上限 20 MB）",
+                    type=["pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "txt", "zip", "jpg", "jpeg", "png", "webp", "dwg", "dxf"],
+                    key=f"task_attachment_file_{task_id}",
+                )
+                upload_submitted = st.form_submit_button("上傳附件", width="stretch")
+
+            if upload_submitted:
+                ok, message, uploader = UserService.authenticate(attachment_account, attachment_password)
+                if not ok:
+                    st.error(message)
+                elif uploaded_attachment is None:
+                    st.error("請先選擇附件。")
+                else:
+                    try:
+                        uploader_name = uploader.get("name") or uploader.get("account") or attachment_account
+                        TaskAttachmentService.upload(
+                            task_id, uploaded_attachment, uploader_name,
+                            uploader.get("account", attachment_account),
+                        )
+                        st.success("附件已上傳。")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"附件上傳失敗：{exc}")
+
+            if not attachments:
+                st.caption("目前尚無附件。")
+            for attachment in attachments:
+                attachment_id = parse_int(attachment.get("id"), 0)
+                file_name = str(attachment.get("file_name") or "附件")
+                meta_col, download_col = st.columns([4, 1])
+                with meta_col:
+                    st.markdown(f"📄 **{html.escape(file_name)}**")
+                    st.caption(
+                        f"{TaskAttachmentService.format_size(attachment.get('size_bytes'))} · "
+                        f"{attachment.get('uploaded_by', '')} · {attachment.get('created_at', '')}"
+                    )
+                with download_col:
+                    download_key = f"attachment_bytes_{task_id}_{attachment_id}"
+                    if st.button("準備下載", key=f"prepare_attachment_{task_id}_{attachment_id}", width="stretch"):
+                        try:
+                            st.session_state[download_key] = TaskAttachmentService.download(attachment)
+                        except Exception as exc:
+                            st.error(f"附件讀取失敗：{exc}")
+                    if download_key in st.session_state:
+                        st.download_button(
+                            "下載", data=st.session_state[download_key], file_name=file_name,
+                            mime=str(attachment.get("mime_type") or "application/octet-stream"),
+                            key=f"download_attachment_{task_id}_{attachment_id}", width="stretch",
+                        )
+
+                with st.form(f"attachment_delete_{task_id}_{attachment_id}"):
+                    delete_attachment1, delete_attachment2, delete_attachment3 = st.columns([1.4, 1.4, 1])
+                    with delete_attachment1:
+                        attachment_deleter_account = st.text_input(
+                            "刪除人工號", key=f"attachment_deleter_account_{task_id}_{attachment_id}"
+                        )
+                    with delete_attachment2:
+                        attachment_deleter_password = st.text_input(
+                            "刪除人密碼", type="password",
+                            key=f"attachment_deleter_password_{task_id}_{attachment_id}",
+                        )
+                    with delete_attachment3:
+                        delete_attachment_submitted = st.form_submit_button("刪除附件", width="stretch")
+                if delete_attachment_submitted:
+                    ok, message, deleter = UserService.authenticate(
+                        attachment_deleter_account, attachment_deleter_password
+                    )
+                    if not ok:
+                        st.error(message)
+                    else:
+                        try:
+                            deleter_name = deleter.get("name") or deleter.get("account") or attachment_deleter_account
+                            TaskAttachmentService.delete(
+                                attachment_id, task_id, deleter_name,
+                                deleter.get("account", attachment_deleter_account),
+                            )
+                            st.success("附件已刪除並移至垃圾桶。")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"附件刪除失敗：{exc}")
+                st.divider()
 
     with st.expander("✏️ 修改任務／回報進度", expanded=False):
         current_category = str(task.get("category") or "待辦事項")
@@ -721,58 +725,59 @@ def render_task(task):
                     except Exception as exc:
                         st.error(f"任務刪除失敗：{exc}")
 
-        with st.expander("💬 留言與操作歷程", expanded=False):
-            with st.form(f"task_comment_{task_id}", clear_on_submit=True):
-                comment_auth1, comment_auth2 = st.columns(2)
-                with comment_auth1:
-                    comment_account = st.text_input("留言人工號", key=f"comment_account_{task_id}")
-                with comment_auth2:
-                    comment_password = st.text_input(
-                        "留言人密碼", type="password", key=f"comment_password_{task_id}"
-                    )
-                comment_text = st.text_area(
-                    "留言內容", max_chars=2000, key=f"comment_text_{task_id}",
-                    placeholder="輸入進度說明、交辦事項或處理結果……",
-                )
-                comment_submitted = st.form_submit_button("送出留言", width="stretch")
-
-            if comment_submitted:
-                ok, message, commenter = UserService.authenticate(comment_account, comment_password)
-                if not ok:
-                    st.error(message)
-                elif not comment_text.strip():
-                    st.error("請輸入留言內容。")
-                else:
-                    try:
-                        commenter_name = commenter.get("name") or commenter.get("account") or comment_account
-                        TaskActivityService.add_comment(
-                            task_id, commenter_name, commenter.get("account", comment_account), comment_text
+        if 功能已開啟("任務留言與操作歷程"):
+            with st.expander("💬 留言與操作歷程", expanded=False):
+                with st.form(f"task_comment_{task_id}", clear_on_submit=True):
+                    comment_auth1, comment_auth2 = st.columns(2)
+                    with comment_auth1:
+                        comment_account = st.text_input("留言人工號", key=f"comment_account_{task_id}")
+                    with comment_auth2:
+                        comment_password = st.text_input(
+                            "留言人密碼", type="password", key=f"comment_password_{task_id}"
                         )
-                        st.success("留言已送出。")
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"留言失敗：{exc}")
+                    comment_text = st.text_area(
+                        "留言內容", max_chars=2000, key=f"comment_text_{task_id}",
+                        placeholder="輸入進度說明、交辦事項或處理結果……",
+                    )
+                    comment_submitted = st.form_submit_button("送出留言", width="stretch")
 
-            activities = TaskActivityService.load_for_task(task_id)
-            legacy_history = task.get("history") or []
-            if not activities and not legacy_history:
-                st.caption("目前尚無留言或操作紀錄。")
-            for activity in reversed(activities[-50:]):
-                event_type = str(activity.get("event_type") or "")
-                icon = "💬" if event_type == "commented" else "📜"
-                actor = html.escape(str(activity.get("actor") or "系統"))
-                created_at = html.escape(str(activity.get("created_at") or ""))
-                summary = html.escape(str(activity.get("summary") or ""))
-                st.markdown(f"{icon} **{actor}** · {created_at}")
-                if activity.get("comment"):
-                    st.write(str(activity.get("comment")))
-                elif summary:
-                    st.caption(summary)
-                st.divider()
-            if legacy_history:
-                st.caption("舊版歷程")
-                for item in reversed(legacy_history[-20:]):
-                    st.caption(str(item))
+                if comment_submitted:
+                    ok, message, commenter = UserService.authenticate(comment_account, comment_password)
+                    if not ok:
+                        st.error(message)
+                    elif not comment_text.strip():
+                        st.error("請輸入留言內容。")
+                    else:
+                        try:
+                            commenter_name = commenter.get("name") or commenter.get("account") or comment_account
+                            TaskActivityService.add_comment(
+                                task_id, commenter_name, commenter.get("account", comment_account), comment_text
+                            )
+                            st.success("留言已送出。")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"留言失敗：{exc}")
+
+                activities = TaskActivityService.load_for_task(task_id)
+                legacy_history = task.get("history") or []
+                if not activities and not legacy_history:
+                    st.caption("目前尚無留言或操作紀錄。")
+                for activity in reversed(activities[-50:]):
+                    event_type = str(activity.get("event_type") or "")
+                    icon = "💬" if event_type == "commented" else "📜"
+                    actor = html.escape(str(activity.get("actor") or "系統"))
+                    created_at = html.escape(str(activity.get("created_at") or ""))
+                    summary = html.escape(str(activity.get("summary") or ""))
+                    st.markdown(f"{icon} **{actor}** · {created_at}")
+                    if activity.get("comment"):
+                        st.write(str(activity.get("comment")))
+                    elif summary:
+                        st.caption(summary)
+                    st.divider()
+                if legacy_history:
+                    st.caption("舊版歷程")
+                    for item in reversed(legacy_history[-20:]):
+                        st.caption(str(item))
 
 
 st.divider()

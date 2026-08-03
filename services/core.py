@@ -110,7 +110,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V5.6.5 開發者後台功能開關"
+    VERSION = "V5.6.6 功能開關顯示修正"
 
     @staticmethod
     def load_enterprise_theme():
