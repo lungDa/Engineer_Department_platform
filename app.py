@@ -1,10 +1,11 @@
 import streamlit as st
 
-from config.功能開關 import 功能已開啟, 要求功能開啟
+from config.功能開關 import 功能分類, 必要功能, 功能已開啟, 要求功能開啟
 
 from services.diagnostics_service import DiagnosticsService
 from services.mail_service import mail_service
 from services.teams_service import teams_service
+from services.feature_flag_service import FeatureFlagService
 from utils import AppInitializer, ViewComponents, TaskService, StreamFlowEngine as engine, UserService, SheetDB
 from config.departments import DEPARTMENTS
 from config.roles import ROLE_LEVELS
@@ -319,7 +320,9 @@ if 功能已開啟("開發者功能") and st.session_state.get("show_developer_p
                     st.session_state["show_developer_panel"] = False
                     st.rerun()
 
-            management_tab, diagnostics_tab = st.tabs(["👥 人員與權限管理", "🩺 系統診斷"])
+            management_tab, feature_tab, diagnostics_tab = st.tabs(
+                ["👥 人員與權限管理", "🎛️ 功能開關管理", "🩺 系統診斷"]
+            )
             with management_tab:
                 st.caption("人員依課別分組；任務、會議與簽核的人名選單只顯示目前課別成員。")
                 selected_department = st.selectbox("管理課別", DEPARTMENTS, key="developer_manage_department")
@@ -391,6 +394,52 @@ if 功能已開啟("開發者功能") and st.session_state.get("show_developer_p
                                 st.rerun()
                     else:
                         st.info("沒有可刪除的人員。")
+
+            with feature_tab:
+                st.markdown("##### 🎛️ 平台功能開關")
+                st.caption("切換後會保存到 Google Sheet，不需修改 GitHub；其他使用者最晚約 5 秒同步。")
+                current_flags = FeatureFlagService.load(功能分類)
+                edited_flags: dict[str, dict[str, str]] = {}
+                for category, features in current_flags.items():
+                    with st.expander(category, expanded=True):
+                        edited_flags[category] = {}
+                        for name, status in features.items():
+                            left, right = st.columns([4, 1])
+                            with left:
+                                st.write(name)
+                            with right:
+                                selected_status = st.selectbox(
+                                    "狀態",
+                                    ["ON", "OFF"],
+                                    index=0 if status == "ON" else 1,
+                                    key=f"feature_flag__{category}__{name}",
+                                    disabled=name in 必要功能,
+                                    help="系統必要功能，無法關閉。" if name in 必要功能 else None,
+                                    label_visibility="collapsed",
+                                )
+                            edited_flags[category][name] = selected_status
+
+                save_col, refresh_col = st.columns(2)
+                with save_col:
+                    if st.button("💾 儲存並套用功能開關", type="primary", width="stretch"):
+                        for required_name in 必要功能:
+                            for features in edited_flags.values():
+                                if required_name in features:
+                                    features[required_name] = "ON"
+                        ok, message = FeatureFlagService.save(
+                            edited_flags,
+                            str(st.session_state.get("management_user", "開發者")),
+                        )
+                        (st.success if ok else st.error)(message)
+                        if ok:
+                            st.rerun()
+                with refresh_col:
+                    if st.button("🔄 重新讀取目前設定", width="stretch"):
+                        SheetDB.bump_cache_version("FeatureFlags")
+                        for key in list(st.session_state.keys()):
+                            if str(key).startswith("feature_flag__"):
+                                st.session_state.pop(key, None)
+                        st.rerun()
 
             with diagnostics_tab:
                 if not 功能已開啟("系統診斷"):

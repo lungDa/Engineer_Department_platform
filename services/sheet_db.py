@@ -92,6 +92,7 @@ class SheetDB:
         "Tasks": 5,
         "TaskActivity": 5,
         "TaskAttachments": 5,
+        "FeatureFlags": 5,
         "Announcements": 5,
         "Meetings": 5,
         "Approvals": 5,

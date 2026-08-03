@@ -1,10 +1,7 @@
 """開發工程部平台集中式功能開關。
 
-使用方式：只修改「功能開關」字典右側的 ON / OFF。
-ON  = 開啟功能
-OFF = 關閉功能
-
-功能名稱與設定值不可任意改字；設定值只接受大寫 ON 或 OFF。
+此檔只保存功能清單與初始值；實際狀態由開發者在平台後台管理，
+並持久保存到 Google Sheet 的 FeatureFlags 工作表。
 """
 
 from __future__ import annotations
@@ -32,7 +29,7 @@ from __future__ import annotations
     "三、任務管理功能": {
         "任務子項目": "ON",
         "任務留言與操作歷程": "ON",
-        "任務附件": "OFF",
+        "任務附件": "ON",
     },
     "四、通知與外部整合": {
         "Teams通知": "ON",
@@ -45,6 +42,9 @@ from __future__ import annotations
         "行事曆匯出": "ON",
     },
 }
+
+# 防止關閉後無法再次進入後台恢復。
+必要功能 = {"首頁", "開發者功能"}
 
 
 _頁面路徑 = {
@@ -75,7 +75,12 @@ def _檢查設定() -> None:
 def 功能已開啟(功能名稱: str) -> bool:
     """回傳指定功能是否開啟；不存在的名稱視為程式設定錯誤。"""
     _檢查設定()
-    for 功能清單 in 功能分類.values():
+    try:
+        from services.feature_flag_service import FeatureFlagService
+        current = FeatureFlagService.load(功能分類)
+    except Exception:
+        current = 功能分類
+    for 功能清單 in current.values():
         if 功能名稱 in 功能清單:
             return 功能清單[功能名稱] == "ON"
     raise KeyError(f"找不到功能開關：{功能名稱}")
@@ -88,7 +93,7 @@ def 要求功能開啟(功能名稱: str) -> None:
     import streamlit as st
 
     st.warning(f"🔒「{功能名稱}」目前已由系統管理員關閉。")
-    st.info("若需重新開啟，請將 config/功能開關.py 內對應項目改為 ON。")
+    st.info("如需重新開啟，請由開發者進入首頁的「功能開關管理」。")
     st.stop()
 
 
@@ -110,8 +115,13 @@ def 隱藏已關閉頁面() -> None:
 def 功能狀態一覽() -> list[dict[str, str]]:
     """提供管理畫面或測試使用的繁體中文功能清單。"""
     _檢查設定()
+    try:
+        from services.feature_flag_service import FeatureFlagService
+        current = FeatureFlagService.load(功能分類)
+    except Exception:
+        current = 功能分類
     return [
         {"功能類別": 類別, "功能名稱": 名稱, "狀態": 狀態}
-        for 類別, 功能清單 in 功能分類.items()
+        for 類別, 功能清單 in current.items()
         for 名稱, 狀態 in 功能清單.items()
     ]
