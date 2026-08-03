@@ -110,7 +110,7 @@ def parse_json_list(value: Any) -> list:
 # 初始化
 # =========================================================
 class AppInitializer:
-    VERSION = "V5.6.0 Microsoft 365 Notifications Foundation"
+    VERSION = "V5.6.2 Task Comments and Audit Trail"
 
     @staticmethod
     def load_enterprise_theme():
@@ -804,16 +804,23 @@ class TaskService:
             raise RuntimeError(st.session_state.get("sheet_db_error", "Google Sheet 任務寫入失敗"))
         records.append(task)
         st.session_state.tasks = records
+        from services.task_activity import TaskActivityService
+        TaskActivityService.record(
+            next_id, "created", author or "系統", account or "",
+            summary=f"建立任務：{task.get('title', '')}",
+        )
         return True
 
     @staticmethod
-    def update_task(task_id, changes, author=None):
+    def update_task(task_id, changes, author=None, account=None):
         records = TaskService.load_all()
         target_id = parse_int(task_id, 0)
         updated_task = None
+        before_task = None
         for task in records:
             if parse_int(task.get("id"), 0) != target_id:
                 continue
+            before_task = dict(task)
             for field, value in changes.items():
                 if field in TaskService.COLUMNS and field not in {
                     "id", "created_by", "created_account", "created_at"
@@ -831,10 +838,17 @@ class TaskService:
         if updated_task is None:
             raise ValueError("找不到要修改的任務。")
         TaskService.save_all(records)
+        from services.task_activity import TaskActivityService
+        summary, details = TaskActivityService.build_changes(before_task or {}, changes)
+        event_type = "checklist_updated" if set(changes) == {"checklist"} else "updated"
+        TaskActivityService.record(
+            target_id, event_type, author or "系統", account or "",
+            summary=summary, changes=details,
+        )
         return dict(updated_task)
 
     @staticmethod
-    def delete_task(task_id, author):
+    def delete_task(task_id, author, account=None):
         records = TaskService.load_all()
         target_id = parse_int(task_id, 0)
         deleted_task = None
@@ -853,6 +867,12 @@ class TaskService:
         if deleted_task is None:
             raise ValueError("找不到要刪除的任務。")
         TaskService.save_all(records)
+        from services.task_activity import TaskActivityService
+        TaskActivityService.record(
+            target_id, "deleted", author or "系統", account or "",
+            summary=f"刪除任務：{deleted_task.get('title', '')}",
+            changes={"status": {"before": "Active", "after": "Deleted"}},
+        )
         return dict(deleted_task)
 
     @staticmethod

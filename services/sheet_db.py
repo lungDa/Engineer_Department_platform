@@ -90,6 +90,7 @@ class SheetDB:
         # 頁面切換優先讀記憶體；新增、修改、刪除後仍會主動失效。
         # 動態業務資料依需求每 5 秒允許重新同步 Google Sheet。
         "Tasks": 5,
+        "TaskActivity": 5,
         "Announcements": 5,
         "Meetings": 5,
         "Approvals": 5,

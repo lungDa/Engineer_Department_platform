@@ -22,6 +22,7 @@ from services.task_checklist import (
     create_checklist_item,
     normalize_checklist,
 )
+from services.task_activity import TaskActivityService
 
 
 st.set_page_config(page_title="任務看板｜Enterprise V6", layout="wide")
@@ -91,7 +92,7 @@ def persist_task(task, changes, account, password):
     if not ok:
         raise PermissionError(message)
     editor_name = editor.get("name") or editor.get("account") or account
-    TaskService.update_task(task.get("id"), changes, author=editor_name)
+    TaskService.update_task(task.get("id"), changes, author=editor_name, account=account)
     return editor_name
 
 
@@ -607,6 +608,7 @@ def render_task(task):
                         deleted_task = TaskService.delete_task(
                             task_id,
                             author=deleter_name,
+                            account=deleter.get("account", deleter_account),
                         )
                         result = notification_service.send_task_event(
                             event="deleted",
@@ -623,10 +625,57 @@ def render_task(task):
                     except Exception as exc:
                         st.error(f"任務刪除失敗：{exc}")
 
-        history = task.get("history") or []
-        if history:
-            with st.expander("📜 活動紀錄", expanded=False):
-                for item in reversed(history[-20:]):
+        with st.expander("💬 留言與操作歷程", expanded=False):
+            with st.form(f"task_comment_{task_id}", clear_on_submit=True):
+                comment_auth1, comment_auth2 = st.columns(2)
+                with comment_auth1:
+                    comment_account = st.text_input("留言人工號", key=f"comment_account_{task_id}")
+                with comment_auth2:
+                    comment_password = st.text_input(
+                        "留言人密碼", type="password", key=f"comment_password_{task_id}"
+                    )
+                comment_text = st.text_area(
+                    "留言內容", max_chars=2000, key=f"comment_text_{task_id}",
+                    placeholder="輸入進度說明、交辦事項或處理結果……",
+                )
+                comment_submitted = st.form_submit_button("送出留言", width="stretch")
+
+            if comment_submitted:
+                ok, message, commenter = UserService.authenticate(comment_account, comment_password)
+                if not ok:
+                    st.error(message)
+                elif not comment_text.strip():
+                    st.error("請輸入留言內容。")
+                else:
+                    try:
+                        commenter_name = commenter.get("name") or commenter.get("account") or comment_account
+                        TaskActivityService.add_comment(
+                            task_id, commenter_name, commenter.get("account", comment_account), comment_text
+                        )
+                        st.success("留言已送出。")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"留言失敗：{exc}")
+
+            activities = TaskActivityService.load_for_task(task_id)
+            legacy_history = task.get("history") or []
+            if not activities and not legacy_history:
+                st.caption("目前尚無留言或操作紀錄。")
+            for activity in reversed(activities[-50:]):
+                event_type = str(activity.get("event_type") or "")
+                icon = "💬" if event_type == "commented" else "📜"
+                actor = html.escape(str(activity.get("actor") or "系統"))
+                created_at = html.escape(str(activity.get("created_at") or ""))
+                summary = html.escape(str(activity.get("summary") or ""))
+                st.markdown(f"{icon} **{actor}** · {created_at}")
+                if activity.get("comment"):
+                    st.write(str(activity.get("comment")))
+                elif summary:
+                    st.caption(summary)
+                st.divider()
+            if legacy_history:
+                st.caption("舊版歷程")
+                for item in reversed(legacy_history[-20:]):
                     st.caption(str(item))
 
 
