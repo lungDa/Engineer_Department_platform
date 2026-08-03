@@ -1,35 +1,99 @@
-name: Keep Services Awake
+name: Keep Streamlit Awake
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    # 每 4 小時執行一次（UTC 時間）
+    - cron: "15 */4 * * *"
+
+  # 允許在 GitHub 頁面手動測試
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  ping-services:
+  keep-alive:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Ping Streamlit
-        run: |
-          curl \
-            --silent \
-            --show-error \
-            --fail \
-            --max-time 60 \
-            --output /dev/null \
-            "https://engineer-department-platform.streamlit.app/"
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Ping Render API
-        if: always()
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Playwright
         run: |
-          curl \
-            --silent \
-            --show-error \
-            --location \
-            --fail \
-            --retry 3 \
-            --retry-delay 10 \
-            --max-time 120 \
-            --output /dev/null \
-            "https://engineer-department-platform.onrender.com/health"
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Open Streamlit with real browser
+        env:
+          STREAMLIT_URL: https://engineer-department-platform.streamlit.app/
+        run: |
+          node <<'EOF'
+          const { chromium } = require("playwright");
+
+          (async () => {
+            const browser = await chromium.launch({
+              headless: true
+            });
+
+            const page = await browser.newPage();
+
+            console.log(`Opening: ${process.env.STREAMLIT_URL}`);
+
+            await page.goto(process.env.STREAMLIT_URL, {
+              waitUntil: "domcontentloaded",
+              timeout: 120000
+            });
+
+            // 如果已休眠，嘗試點擊喚醒按鈕
+            const wakeButtons = [
+              /Yes, get this app back up/i,
+              /Get this app back up/i,
+              /Wake up/i
+            ];
+
+            for (const buttonName of wakeButtons) {
+              const button = page.getByRole("button", {
+                name: buttonName
+              });
+
+              if (await button.count()) {
+                console.log("Sleep page detected. Clicking wake button.");
+                await button.first().click();
+                await page.waitForTimeout(60000);
+                break;
+              }
+            }
+
+            // 等待 Streamlit 前端建立連線
+            await page.waitForTimeout(45000);
+
+            console.log(`Final URL: ${page.url()}`);
+            console.log(`Page title: ${await page.title()}`);
+
+            await page.screenshot({
+              path: "streamlit-status.png",
+              fullPage: true
+            });
+
+            await browser.close();
+          })().catch(error => {
+            console.error(error);
+            process.exit(1);
+          });
+          EOF
+
+      - name: Upload status screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamlit-status
+          path: streamlit-status.png
+          retention-days: 3
+          if-no-files-found: ignore
