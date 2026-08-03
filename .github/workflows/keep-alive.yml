@@ -2,19 +2,26 @@ name: Keep Streamlit Awake
 
 on:
   schedule:
-    # 每 4 小時執行一次（UTC 時間）
-    - cron: "15 */4 * * *"
+    # 每 3 小時執行一次
+    # GitHub Actions 使用 UTC 時間
+    - cron: "15 */3 * * *"
 
-  # 允許在 GitHub 頁面手動測試
+  # 允許手動執行測試
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# 避免同一時間重複執行
+concurrency:
+  group: keep-streamlit-awake
+  cancel-in-progress: true
+
 jobs:
   keep-alive:
+    name: Wake Streamlit App
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -25,75 +32,231 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install Playwright
+      - name: Install Playwright and Chromium
         run: |
           npm install --no-save playwright
           npx playwright install --with-deps chromium
 
-      - name: Open Streamlit with real browser
+      - name: Open and wake Streamlit
         env:
           STREAMLIT_URL: https://engineer-department-platform.streamlit.app/
         run: |
           node <<'EOF'
           const { chromium } = require("playwright");
 
-          (async () => {
-            const browser = await chromium.launch({
-              headless: true
+          const sleepPattern =
+            /gone to sleep due to inactivity|app has gone to sleep/i;
+
+          const wakePattern =
+            /Yes,\s*get this app back up!?|Get this app back up|Wake up/i;
+
+          async function takeScreenshot(page, fileName) {
+            await page.screenshot({
+              path: fileName,
+              fullPage: true
             });
 
-            const page = await browser.newPage();
+            console.log(`Screenshot saved: ${fileName}`);
+          }
 
-            console.log(`Opening: ${process.env.STREAMLIT_URL}`);
+          async function readPageText(page) {
+            try {
+              return await page.locator("body").innerText({
+                timeout: 30000
+              });
+            } catch (error) {
+              console.log("Unable to read page text:", error.message);
+              return "";
+            }
+          }
 
-            await page.goto(process.env.STREAMLIT_URL, {
+          async function openPage(page, url) {
+            console.log(`Opening: ${url}`);
+
+            await page.goto(url, {
               waitUntil: "domcontentloaded",
               timeout: 120000
             });
 
-            // 如果已休眠，嘗試點擊喚醒按鈕
-            const wakeButtons = [
-              /Yes, get this app back up/i,
-              /Get this app back up/i,
-              /Wake up/i
+            await page.waitForTimeout(10000);
+
+            console.log(`Current URL: ${page.url()}`);
+            console.log(`Page title: ${await page.title()}`);
+          }
+
+          async function findAndClickWakeControl(page) {
+            const selectors = [
+              page.getByRole("button", {
+                name: wakePattern
+              }),
+
+              page.getByRole("link", {
+                name: wakePattern
+              }),
+
+              page.getByText(wakePattern),
+
+              page.locator("button").filter({
+                hasText: wakePattern
+              }),
+
+              page.locator("a").filter({
+                hasText: wakePattern
+              })
             ];
 
-            for (const buttonName of wakeButtons) {
-              const button = page.getByRole("button", {
-                name: buttonName
-              });
+            for (const locator of selectors) {
+              try {
+                const count = await locator.count();
 
-              if (await button.count()) {
-                console.log("Sleep page detected. Clicking wake button.");
-                await button.first().click();
-                await page.waitForTimeout(60000);
-                break;
+                if (count === 0) {
+                  continue;
+                }
+
+                const control = locator.first();
+
+                if (await control.isVisible()) {
+                  console.log("Wake-up control found.");
+
+                  await control.scrollIntoViewIfNeeded();
+
+                  await control.click({
+                    force: true,
+                    timeout: 30000
+                  });
+
+                  console.log("Wake-up control clicked.");
+                  return true;
+                }
+              } catch (error) {
+                console.log(
+                  `Wake selector failed: ${error.message}`
+                );
               }
             }
 
-            // 等待 Streamlit 前端建立連線
-            await page.waitForTimeout(45000);
+            return false;
+          }
 
-            console.log(`Final URL: ${page.url()}`);
-            console.log(`Page title: ${await page.title()}`);
+          (async () => {
+            const url = process.env.STREAMLIT_URL;
 
-            await page.screenshot({
-              path: "streamlit-status.png",
-              fullPage: true
+            if (!url) {
+              throw new Error("STREAMLIT_URL is not configured.");
+            }
+
+            const browser = await chromium.launch({
+              headless: true
             });
 
-            await browser.close();
+            const context = await browser.newContext({
+              viewport: {
+                width: 1536,
+                height: 900
+              },
+
+              userAgent:
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                "Chrome/142.0.0.0 Safari/537.36"
+            });
+
+            const page = await context.newPage();
+
+            try {
+              await openPage(page, url);
+              await takeScreenshot(page, "streamlit-before.png");
+
+              let bodyText = await readPageText(page);
+              let sleeping = sleepPattern.test(bodyText);
+
+              if (sleeping) {
+                console.log("Streamlit sleep page detected.");
+
+                const clicked =
+                  await findAndClickWakeControl(page);
+
+                if (!clicked) {
+                  throw new Error(
+                    "Sleep page detected, but wake-up control was not found."
+                  );
+                }
+
+                // 給 Streamlit 伺服器啟動時間
+                console.log("Waiting for Streamlit to start...");
+                await page.waitForTimeout(90000);
+              } else {
+                console.log(
+                  "Sleep page was not detected. App may already be awake."
+                );
+              }
+
+              let awake = false;
+
+              // 最長檢查 10 次，每次間隔約 30 秒
+              for (let attempt = 1; attempt <= 10; attempt++) {
+                console.log(`Wake check ${attempt}/10`);
+
+                try {
+                  await openPage(page, url);
+                } catch (error) {
+                  console.log(
+                    `Page opening failed: ${error.message}`
+                  );
+                }
+
+                bodyText = await readPageText(page);
+                sleeping = sleepPattern.test(bodyText);
+
+                if (!sleeping) {
+                  awake = true;
+                  console.log("Streamlit app is awake.");
+                  break;
+                }
+
+                console.log(
+                  "App is still sleeping. Trying wake control again."
+                );
+
+                await findAndClickWakeControl(page);
+                await page.waitForTimeout(30000);
+              }
+
+              await takeScreenshot(
+                page,
+                "streamlit-status.png"
+              );
+
+              console.log(`Final URL: ${page.url()}`);
+              console.log(`Final title: ${await page.title()}`);
+
+              if (!awake) {
+                throw new Error(
+                  "Streamlit is still showing the sleep page."
+                );
+              }
+
+              console.log(
+                "Keep-alive verification completed successfully."
+              );
+            } finally {
+              await context.close();
+              await browser.close();
+            }
           })().catch(error => {
+            console.error("Keep-alive failed:");
             console.error(error);
             process.exit(1);
           });
           EOF
 
-      - name: Upload status screenshot
+      - name: Upload status screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: streamlit-status
-          path: streamlit-status.png
+          name: streamlit-status-${{ github.run_number }}
+          path: |
+            streamlit-before.png
+            streamlit-status.png
           retention-days: 3
           if-no-files-found: ignore
