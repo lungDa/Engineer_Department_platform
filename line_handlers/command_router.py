@@ -1,5 +1,6 @@
 from line_handlers.announcement_commands import announcements_text
 from line_handlers.binding_commands import bind_line_account
+from line_handlers.certificate_commands import certificate_status_text
 from line_handlers.leave_create_commands import create_leave_from_line
 from line_handlers.overtime_create_commands import create_overtime_from_line
 from line_handlers.password_commands import change_password_from_line
@@ -27,6 +28,11 @@ class LineCommandRouter:
             return create_overtime_from_line(text=text, user_id=user_id)
         if raw in {"#任務", "＃任務"}:
             return create_task_from_line(text=text, user_id=user_id)
+
+        # 查詢指令不應被進行中的密碼、請假、加班或任務問答誤當成輸入內容。
+        certificate_reply = certificate_status_text(text=text, user_id=user_id)
+        if certificate_reply is not None:
+            return certificate_reply
 
         password_reply = change_password_from_line(text=text, user_id=user_id)
         if password_reply is not None:
@@ -65,6 +71,7 @@ class LineCommandRouter:
             "・狀態\n"
             "・我的任務\n"
             "・公告\n"
+            "・證照／我的證照／證照 關鍵字\n"
             "・修改密碼\n"
             "・#任務（建立任務）\n"
             "・#請假（建立請假申請）"
