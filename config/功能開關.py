@@ -83,8 +83,14 @@ def 功能已開啟(功能名稱: str) -> bool:
     except Exception:
         current = 功能分類
     for 功能清單 in current.values():
-        if 功能名稱 in 功能清單:
+        if isinstance(功能清單, dict) and 功能名稱 in 功能清單:
             return 功能清單[功能名稱] == "ON"
+
+    # 相容尚未同步新功能列的既有 FeatureFlags 資料。
+    # 新功能先依程式內建值運作，之後由管理頁儲存時會補齊工作表資料。
+    for 預設功能清單 in 功能分類.values():
+        if 功能名稱 in 預設功能清單:
+            return 預設功能清單[功能名稱] == "ON"
     raise KeyError(f"找不到功能開關：{功能名稱}")
 
 
