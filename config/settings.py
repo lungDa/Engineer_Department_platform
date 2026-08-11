@@ -57,7 +57,7 @@ class Settings:
     app_name: str = os.getenv("APP_NAME", "Engineer Department Platform")
     app_version: str = os.getenv(
         "APP_VERSION",
-        "V5.6.0 Microsoft 365 Notifications Foundation",
+        "V5.7.0 證照資料整合初版",
     )
     environment: str = os.getenv("ENVIRONMENT", "development")
 

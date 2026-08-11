@@ -1,7 +1,7 @@
-# V5.6.0 Microsoft 365 Notifications Foundation constants
+# V5.7.0 Certificate Integration constants
 
 APP_TITLE = "開發工程部平台"
-APP_VERSION = "V5.6.0 Microsoft 365 Notifications Foundation"
+APP_VERSION = "V5.7.0 證照資料整合初版"
 
 DEFAULT_DATE_FORMAT = "%Y-%m-%d"
 DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M"
@@ -13,6 +13,7 @@ WORKSHEET_TAGS = "Tags"
 WORKSHEET_ANNOUNCEMENTS = "Announcements"
 WORKSHEET_MEETINGS = "Meetings"
 WORKSHEET_APPROVALS = "Approvals"
+WORKSHEET_CERTIFICATES = "Certificates"
 
 STATUS_ACTIVE = "Active"
 STATUS_COMPLETED = "Completed"

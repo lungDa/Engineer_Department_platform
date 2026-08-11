@@ -423,5 +423,61 @@ class NotificationService:
             "通知已處理。" if not failed_channels else "部分通知發送失敗。",
         )
 
+    def send_certificate_expiry(
+        self,
+        *,
+        certificate: dict,
+        recipient_names: Iterable[str],
+        channels: Iterable[str] = ("teams", "outlook", "line"),
+    ) -> dict:
+        """Send one certificate-expiry reminder to the selected platform users."""
+        names = [str(name).strip() for name in recipient_names if str(name).strip()]
+        contacts = self._contacts(names)
+        enabled = self._enabled_channels(channels)
+        holder = str(certificate.get("name") or "-")
+        title = str(certificate.get("certificate_name") or "未命名證照")
+        expiry = str(certificate.get("expiry_date") or "-")
+        message = (
+            f"證照即將到期\n人員：{holder}\n證照：{title}\n"
+            f"證書字號：{certificate.get('certificate_number') or '-'}\n到期日期：{expiry}"
+        )
+        results: dict[str, dict] = {}
+        teams_recipients = self._m365_emails(contacts)
+        results["teams"] = (
+            teams_service.send(
+                title="工程部平台｜證照到期提醒",
+                message=f"{holder}｜{title}",
+                recipients=teams_recipients,
+                level="warning",
+                facts={"人員": holder, "證照": title, "到期日期": expiry},
+                source_url=get_settings().streamlit_base_url,
+            ) if "teams" in enabled and teams_recipients
+            else self._skipped("未選擇 Teams 或通知人員尚未設定 M365 Email。")
+        )
+        emails = [str(user.get("email") or "").strip() for user in contacts if str(user.get("email") or "").strip()]
+        results["outlook"] = (
+            mail_service.send(emails, f"[工程部平台] 證照到期提醒｜{holder}｜{title}", message)
+            if "outlook" in enabled and emails
+            else self._skipped("未選擇 Outlook 或通知人員尚未設定 Email。")
+        )
+        line_targets = [
+            (str(user.get("name") or "").strip(), str(user.get("line_user_id") or "").strip())
+            for user in contacts if str(user.get("line_user_id") or "").strip()
+        ]
+        if "line" in enabled and line_targets:
+            deliveries = [(name, line_service.push_text(user_id, message)) for name, user_id in line_targets]
+            failed = [name for name, result in deliveries if not result.get("ok")]
+            results["line"] = (
+                {"ok": False, "message": "LINE 通知失敗：" + "、".join(failed), "data": deliveries}
+                if failed else success({"recipients": [name for name, _ in deliveries]}, "LINE 已個別通知。")
+            )
+        else:
+            results["line"] = self._skipped("未選擇 LINE 或通知人員尚未設定 LINE User ID。")
+        failed_channels = [name for name, result in results.items() if not result.get("ok")]
+        return success(
+            {"channels": results, "failed_channels": failed_channels},
+            "通知已處理。" if not failed_channels else "部分通知發送失敗。",
+        )
+
 
 notification_service = NotificationService()

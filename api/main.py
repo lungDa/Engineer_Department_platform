@@ -4,6 +4,7 @@ from api.middleware.cors import setup_cors
 from api.middleware.logging import request_logging_middleware
 from api.routers import (
     announcements,
+    certificate_reminders,
     health,
     line,
     line_test,
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router)
     app.include_router(users.router)
     app.include_router(announcements.router)
+    app.include_router(certificate_reminders.router)
     app.include_router(line.router)
     app.include_router(line_test.router)
     app.include_router(notifications.router)
