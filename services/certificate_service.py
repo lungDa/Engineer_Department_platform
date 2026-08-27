@@ -11,6 +11,27 @@ from services.sheet_db import SheetDB
 
 class CertificateService:
     WORKSHEET_NAME = "Certificates"
+    CERTIFICATE_DEFAULTS = {
+        "職業安全管理師": {"category": "職安", "retraining_frequency": "12HR/2年"},
+        "職業衛生管理師": {"category": "職安", "retraining_frequency": "12HR/2年"},
+        "職業安全衛生管理員": {"category": "職安", "retraining_frequency": "12HR/2年"},
+        "甲種職業安全衛生業務主管": {"category": "職安", "retraining_frequency": "6HR/2年"},
+        "乙種職業安全衛生業務主管": {"category": "職安", "retraining_frequency": "6HR/2年"},
+        "丙種職業安全衛生業務主管": {"category": "職安", "retraining_frequency": "6HR/2年"},
+        "營造甲種業務主管": {"category": "職安", "retraining_frequency": "6HR/2年"},
+        "營造乙種業務主管": {"category": "職安", "retraining_frequency": "6HR/2年"},
+        "營造丙種業務主管": {"category": "職安", "retraining_frequency": "6HR/2年"},
+        "一般安全衛生教育訓練(6小時)": {"category": "職安", "retraining_frequency": "3HR/3年"},
+        "營造一般安全衛生教育訓練(6小時)": {"category": "職安", "retraining_frequency": "3HR/3年"},
+        "特定化學物質作業主管": {"category": "作業主管", "retraining_frequency": "6HR/3年"},
+        "缺氧作業主管": {"category": "作業主管", "retraining_frequency": "6HR/3年"},
+        "有機溶劑作業主管": {"category": "作業主管", "retraining_frequency": "6HR/3年"},
+        "粉塵作業主管": {"category": "作業主管", "retraining_frequency": "6HR/3年"},
+        "屋頂作業主管": {"category": "作業主管", "retraining_frequency": "6HR/3年"},
+        "急救人員": {"category": "操作人員", "retraining_frequency": "3HR/3年"},
+        "堆高機操作": {"category": "操作人員", "retraining_frequency": "3HR/3年"},
+        "高空工作車操作人員": {"category": "操作人員", "retraining_frequency": "3HR/3年"},
+    }
     COLUMNS = [
         "id", "account", "name", "certificate_name", "certificate_number",
         "issuer", "retraining_frequency", "issue_date", "retraining_date",

@@ -26,15 +26,30 @@ all_people = UserService.get_all_partner_names(current_department())
 
 
 with st.expander("➕ 新增人員證照（所有人皆可使用）", expanded=False):
+    certificate_options = list(CertificateService.CERTIFICATE_DEFAULTS)
+    certificate_name = st.selectbox(
+        "證照名稱 *",
+        certificate_options,
+        format_func=lambda value: (
+            f"{CertificateService.CERTIFICATE_DEFAULTS[value]['category']}｜{value}"
+        ),
+        help="選擇後會自動帶入預設複訓頻率；當次可修改，但不會改變系統預設值。",
+    )
+    certificate_default = CertificateService.CERTIFICATE_DEFAULTS[certificate_name]
+
     with st.form("certificate_add_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
             holder_name = st.selectbox("姓名 *", list(users_by_name))
-            certificate_name = st.text_input("證照名稱 *")
             certificate_number = st.text_input("證書字號")
         with c2:
             issuer = st.text_input("認證單位（以最新複訓單位登錄）")
-            retraining_frequency = st.text_input("複訓頻率", placeholder="例如：3HR／3年")
+            retraining_frequency = st.text_input(
+                "複訓頻率",
+                value=certificate_default["retraining_frequency"],
+                key=f"certificate_retraining_{certificate_name}",
+                help="這裡的修改只套用本次新增資料，不會改變此證照的預設值。",
+            )
             issue_date = st.date_input("發證日期 *", value=date.today())
         with c3:
             has_retraining_date = st.checkbox("已有最近複訓日期")
@@ -63,7 +78,7 @@ with st.expander("➕ 新增人員證照（所有人皆可使用）", expanded=F
         notes = st.text_area("備註")
 
         if st.form_submit_button("新增證照資料", type="primary", width="stretch"):
-            if not holder_name or not certificate_name.strip():
+            if not holder_name or not certificate_name:
                 st.error("請選擇姓名並填寫證照名稱。")
             elif expiry_date < issue_date:
                 st.error("到期日期不可早於發證日期。")
@@ -76,7 +91,7 @@ with st.expander("➕ 新增人員證照（所有人皆可使用）", expanded=F
                 saved = CertificateService.add({
                     "account": holder.get("account", ""),
                     "name": holder_name,
-                    "certificate_name": certificate_name.strip(),
+                    "certificate_name": certificate_name,
                     "certificate_number": certificate_number.strip(),
                     "issuer": issuer.strip(),
                     "retraining_frequency": retraining_frequency.strip(),
