@@ -36,6 +36,11 @@ with st.expander("➕ 新增人員證照（所有人皆可使用）", expanded=F
         help="選擇後會自動帶入預設複訓頻率；當次可修改，但不會改變系統預設值。",
     )
     certificate_default = CertificateService.CERTIFICATE_DEFAULTS[certificate_name]
+    has_retraining_date = st.checkbox(
+        "已有最近複訓日期",
+        value=False,
+        help="勾選後才會顯示日期欄位，日期可依實際複訓日修改。",
+    )
 
     with st.form("certificate_add_form", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
@@ -52,8 +57,11 @@ with st.expander("➕ 新增人員證照（所有人皆可使用）", expanded=F
             )
             issue_date = st.date_input("發證日期 *", value=date.today())
         with c3:
-            has_retraining_date = st.checkbox("已有最近複訓日期")
-            retraining_date = st.date_input("最近複訓日期", value=date.today(), disabled=not has_retraining_date)
+            if has_retraining_date:
+                retraining_date = st.date_input("最近複訓日期 *", value=date.today())
+            else:
+                retraining_date = None
+                st.caption("最近複訓日期：未設定")
             expiry_date = st.date_input("到期日期 *", value=date.today())
 
         st.markdown("##### 到期提醒（可選）")
