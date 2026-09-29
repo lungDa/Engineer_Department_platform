@@ -1,0 +1,52 @@
+name: Python source validation
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: source-validation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  syntax:
+    name: Python syntax (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile tracked Python source without importing application modules
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+          import subprocess
+          import sys
+
+          paths = subprocess.check_output(
+              ["git", "ls-files", "-z", "--", "*.py"]
+          ).decode("utf-8").split("\0")
+          files = [pathlib.Path(path) for path in paths if path]
+          if not files:
+              sys.exit("No Python files found; refusing a false pass.")
+          errors = []
+          for path in files:
+              try:
+                  compile(path.read_bytes(), str(path), "exec")
+              except (SyntaxError, UnicodeError, ValueError) as exc:
+                  errors.append(f"{path}: {type(exc).__name__}, line {getattr(exc, 'lineno', '?')}")
+          print(f"Checked {len(files)} Python source files; errors: {len(errors)}")
+          for error in errors:
+              print(error)
+          sys.exit(bool(errors))
+          PY
